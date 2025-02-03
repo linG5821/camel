@@ -42,11 +42,15 @@ import org.apache.camel.support.service.ServiceHelper;
 import org.apache.camel.support.service.ServiceSupport;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.ObjectHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Default {@link RoutesLoader}.
  */
 public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader, StaticService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultRoutesLoader.class);
 
     /**
      * Prefix to use for looking up existing {@link RoutesLoader} from the {@link org.apache.camel.spi.Registry}.
@@ -56,6 +60,7 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
     private final Map<String, RoutesBuilderLoader> loaders;
 
     private CamelContext camelContext;
+    private boolean ignoreLoadingError;
 
     public DefaultRoutesLoader() {
         this(null);
@@ -83,6 +88,14 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
         this.camelContext = camelContext;
     }
 
+    public boolean isIgnoreLoadingError() {
+        return ignoreLoadingError;
+    }
+
+    public void setIgnoreLoadingError(boolean ignoreLoadingError) {
+        this.ignoreLoadingError = ignoreLoadingError;
+    }
+
     @Override
     public Collection<RoutesBuilder> findRoutesBuilders(Collection<Resource> resources) throws Exception {
         return findRoutesBuilders(resources, false);
@@ -92,24 +105,22 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
     public Collection<RoutesBuilder> findRoutesBuilders(Collection<Resource> resources, boolean optional) throws Exception {
         List<RoutesBuilder> answer = new ArrayList<>(resources.size());
 
-        // first we need to parse for modeline to gather all the configurations
-        if (camelContext.isModeline()) {
-            ModelineFactory factory = PluginHelper.getModelineFactory(camelContext);
-            for (Resource resource : resources) {
-                try (RoutesBuilderLoader loader = resolveRoutesBuilderLoader(resource, optional)) {
-                    if (loader != null) {
-                        // gather resources for modeline
-                        factory.parseModeline(resource);
-                        // pre-parse before loading
-                        loader.preParseRoute(resource);
-                    }
-                }
+        // sort groups so java is first
+        List<Resource> sort = new ArrayList<>(resources);
+        sort.sort((o1, o2) -> {
+            String ext1 = FileUtil.onlyExt(o1.getLocation(), false);
+            String ext2 = FileUtil.onlyExt(o2.getLocation(), false);
+            if ("java".equals(ext1)) {
+                return -1;
+            } else if ("java".equals(ext2)) {
+                return 1;
             }
-        }
+            return 0;
+        });
 
-        // now group resources by loader
+        // group resources by loader (java, xml, yaml in their own group)
         Map<RoutesBuilderLoader, List<Resource>> groups = new LinkedHashMap<>();
-        for (Resource resource : resources) {
+        for (Resource resource : sort) {
             RoutesBuilderLoader loader = resolveRoutesBuilderLoader(resource, optional);
             if (loader != null) {
                 List<Resource> list = groups.getOrDefault(loader, new ArrayList<>());
@@ -118,21 +129,81 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
             }
         }
 
-        // now load all the same resources for each loader
+        // first we need to parse for modeline to gather all the configurations
+        if (camelContext.isModeline()) {
+            ModelineFactory factory = PluginHelper.getModelineFactory(camelContext);
+            for (Map.Entry<RoutesBuilderLoader, List<Resource>> entry : groups.entrySet()) {
+                // parse modelines for all resources
+                for (Resource resource : entry.getValue()) {
+                    factory.parseModeline(resource);
+                }
+            }
+        }
+
+        // then pre-parse routes
         for (Map.Entry<RoutesBuilderLoader, List<Resource>> entry : groups.entrySet()) {
             RoutesBuilderLoader loader = entry.getKey();
-            if (loader instanceof ExtendedRoutesBuilderLoader) {
-                // extended loader can load all resources ine one unit
-                ExtendedRoutesBuilderLoader extLoader = (ExtendedRoutesBuilderLoader) loader;
-                Collection<RoutesBuilder> builders = extLoader.loadRoutesBuilders(entry.getValue());
-                if (builders != null) {
-                    answer.addAll(builders);
+            // the extended loader can load all resources in one unit
+            if (loader instanceof ExtendedRoutesBuilderLoader extLoader) {
+                // pre-parse before loading
+                List<Resource> files = entry.getValue();
+                try {
+                    extLoader.preParseRoutes(files);
+                } catch (Exception e) {
+                    if (isIgnoreLoadingError()) {
+                        LOG.warn("Loading resources error: {} due to: {}. This exception is ignored.", files, e.getMessage());
+                    } else {
+                        throw e;
+                    }
                 }
             } else {
                 for (Resource resource : entry.getValue()) {
-                    RoutesBuilder builder = loader.loadRoutesBuilder(resource);
-                    if (builder != null) {
-                        answer.add(builder);
+                    try {
+                        loader.preParseRoute(resource);
+                    } catch (Exception e) {
+                        if (isIgnoreLoadingError()) {
+                            LOG.warn("Loading resources error: {} due to: {}. This exception is ignored.", resource,
+                                    e.getMessage());
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+            }
+        }
+
+        // now load all the same resources for each loader
+        for (Map.Entry<RoutesBuilderLoader, List<Resource>> entry : groups.entrySet()) {
+            RoutesBuilderLoader loader = entry.getKey();
+            // the extended loader can load all resources in one unit
+            if (loader instanceof ExtendedRoutesBuilderLoader extLoader) {
+                List<Resource> files = entry.getValue();
+                try {
+                    Collection<RoutesBuilder> builders = extLoader.loadRoutesBuilders(files);
+                    if (builders != null) {
+                        answer.addAll(builders);
+                    }
+                } catch (Exception e) {
+                    if (isIgnoreLoadingError()) {
+                        LOG.warn("Loading resources error: {} due to: {}. This exception is ignored.", files, e.getMessage());
+                    } else {
+                        throw e;
+                    }
+                }
+            } else {
+                for (Resource resource : entry.getValue()) {
+                    try {
+                        RoutesBuilder builder = loader.loadRoutesBuilder(resource);
+                        if (builder != null) {
+                            answer.add(builder);
+                        }
+                    } catch (Exception e) {
+                        if (isIgnoreLoadingError()) {
+                            LOG.warn("Loading resources error: {} due to: {}. This exception is ignored.", resource,
+                                    e.getMessage());
+                        } else {
+                            throw e;
+                        }
                     }
                 }
             }
@@ -158,7 +229,11 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
                 RoutesBuilderLoader.class);
 
         if (answer == null) {
-            answer = loaders.computeIfAbsent(extension, this::resolveService);
+            answer = loaders.values().stream()
+                    // find existing loader that support this extension
+                    .filter(l -> l.isSupportedExtension(extension)).findFirst()
+                    // or resolve loader from classpath
+                    .orElse(loaders.computeIfAbsent(extension, this::resolveService));
         }
 
         return answer;
@@ -172,10 +247,30 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
      */
     protected RoutesBuilderLoader resolveService(String extension) {
         final CamelContext ecc = getCamelContext();
+
+        // check registry first
+        for (RoutesBuilderLoader loader : ecc.getRegistry().findByType(RoutesBuilderLoader.class)) {
+            if (loader.isSupportedExtension(extension)) {
+                return loader;
+            }
+        }
+
         final FactoryFinder finder = ecc.getCamelContextExtension().getBootstrapFactoryFinder(RoutesBuilderLoader.FACTORY_PATH);
 
+        // the marker files are generated with dot as dash
+        String sanitized = extension.replace(".", "-");
         RoutesBuilderLoader answer
-                = ResolverHelper.resolveService(getCamelContext(), finder, extension, RoutesBuilderLoader.class).orElse(null);
+                = ResolverHelper.resolveService(getCamelContext(), finder, sanitized, RoutesBuilderLoader.class).orElse(null);
+
+        // if it's a multi-extension then fallback to parent
+        if (answer == null && extension.contains(".")) {
+            String single = FileUtil.onlyExt(extension, true);
+            answer = ResolverHelper.resolveService(getCamelContext(), finder, single, RoutesBuilderLoader.class).orElse(null);
+            if (answer != null && !answer.isSupportedExtension(extension)) {
+                // okay we cannot support this extension as fallback
+                answer = null;
+            }
+        }
 
         if (answer != null) {
             CamelContextAware.trySetCamelContext(answer, getCamelContext());
@@ -197,8 +292,7 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
         Collection<RoutesBuilder> builders = findRoutesBuilders(resources);
         for (RoutesBuilder builder : builders) {
             // update any existing route configurations first
-            if (builder instanceof RouteConfigurationsBuilder) {
-                RouteConfigurationsBuilder rcb = (RouteConfigurationsBuilder) builder;
+            if (builder instanceof RouteConfigurationsBuilder rcb) {
                 rcb.updateRouteConfigurationsToCamelContext(getCamelContext());
             }
         }
@@ -212,20 +306,19 @@ public class DefaultRoutesLoader extends ServiceSupport implements RoutesLoader,
     }
 
     protected RoutesBuilderLoader resolveRoutesBuilderLoader(Resource resource, boolean optional) throws Exception {
+        RoutesBuilderLoader answer = null;
+
         // the loader to use is derived from the file extension
         final String extension = FileUtil.onlyExt(resource.getLocation(), false);
 
-        if (ObjectHelper.isEmpty(extension)) {
-            throw new IllegalArgumentException(
-                    "Unable to determine file extension for resource: " + resource.getLocation());
+        if (extension != null) {
+            answer = getRoutesLoader(extension);
         }
-
-        RoutesBuilderLoader loader = getRoutesLoader(extension);
-        if (!optional && loader == null) {
+        if (!optional && answer == null) {
             throw new IllegalArgumentException(
                     "Cannot find RoutesBuilderLoader in classpath supporting file extension: " + extension);
         }
-        return loader;
+        return answer;
     }
 
 }

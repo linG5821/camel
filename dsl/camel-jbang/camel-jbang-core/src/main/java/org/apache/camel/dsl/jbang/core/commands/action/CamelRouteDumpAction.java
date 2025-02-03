@@ -17,16 +17,15 @@
 package org.apache.camel.dsl.jbang.core.commands.action;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.camel.dsl.jbang.core.commands.CamelJBangMain;
 import org.apache.camel.support.PatternHelper;
 import org.apache.camel.util.FileUtil;
 import org.apache.camel.util.IOHelper;
-import org.apache.camel.util.StopWatch;
 import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 import org.apache.camel.util.json.Jsoner;
@@ -35,7 +34,8 @@ import picocli.CommandLine.Command;
 
 import static org.apache.camel.support.LoggerHelper.stripSourceLocationLineNumber;
 
-@Command(name = "route-dump", description = "Dump Camel route in XML or YAML format")
+@Command(name = "route-dump", description = "Dump Camel route in XML or YAML format", sortOptions = false,
+         showDefaultValues = true)
 public class CamelRouteDumpAction extends ActionBaseCommand {
 
     public static class NameIdCompletionCandidates implements Iterable<String> {
@@ -61,6 +61,10 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
                         description = "To output raw without metadata")
     boolean raw;
 
+    @CommandLine.Option(names = { "--uri-as-parameters" },
+                        description = "Whether to expand URIs into separated key/value parameters (only in use for YAML format)")
+    boolean uriAsParameters;
+
     @CommandLine.Option(names = { "--filter" },
                         description = "Filter route by filename (multiple names can be separated by comma)")
     String filter;
@@ -83,8 +87,8 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
         if (pids.isEmpty()) {
             return 0;
         } else if (pids.size() > 1) {
-            System.out.println("Name or pid " + name + " matches " + pids.size()
-                               + " running Camel integrations. Specify a name or PID that matches exactly one.");
+            printer().println("Name or pid " + name + " matches " + pids.size()
+                              + " running Camel integrations. Specify a name or PID that matches exactly one.");
             return 0;
         }
 
@@ -98,6 +102,7 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
         root.put("action", "route-dump");
         root.put("filter", "*");
         root.put("format", format);
+        root.put("uriAsParameters", uriAsParameters);
         File file = getActionFile(Long.toString(pid));
         try {
             IOHelper.writeText(root.toJson(), file);
@@ -113,7 +118,6 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
                 Row row = new Row();
                 row.location = extractSourceName(o.getString("source"));
                 row.routeId = o.getString("routeId");
-                // if there are 2+ routes in the same source then we would have duplicates
                 if (!rows.contains(row)) {
                     List<JsonObject> lines = o.getCollection("code");
                     if (lines != null) {
@@ -149,7 +153,7 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
                 }
             }
         } else {
-            System.out.println("Response from running Camel with PID " + pid + " not received within 5 seconds");
+            printer().println("Response from running Camel with PID " + pid + " not received within 5 seconds");
             return 1;
         }
 
@@ -185,43 +189,26 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
 
     protected void printSource(List<Row> rows) {
         for (Row row : rows) {
-            System.out.println();
+            printer().println();
             if (!raw) {
-                System.out.printf("Source: %s%n", row.location);
-                System.out.println("--------------------------------------------------------------------------------");
+                printer().printf("Source: %s%n", row.location);
+                printer().println("--------------------------------------------------------------------------------");
             }
             for (int i = 0; i < row.code.size(); i++) {
                 Code code = row.code.get(i);
                 String c = Jsoner.unescape(code.code);
                 if (raw) {
-                    System.out.printf("%s%n", c);
+                    printer().printf("%s%n", c);
                 } else {
-                    System.out.printf("%4d: %s%n", code.line, c);
+                    printer().printf("%4d: %s%n", code.line, c);
                 }
             }
-            System.out.println();
+            printer().println();
         }
     }
 
     protected JsonObject waitForOutputFile(File outputFile) {
-        StopWatch watch = new StopWatch();
-        while (watch.taken() < 5000) {
-            try {
-                // give time for response to be ready
-                Thread.sleep(100);
-
-                if (outputFile.exists()) {
-                    FileInputStream fis = new FileInputStream(outputFile);
-                    String text = IOHelper.loadText(fis);
-                    IOHelper.close(fis);
-                    return (JsonObject) Jsoner.deserialize(text);
-                }
-
-            } catch (Exception e) {
-                // ignore
-            }
-        }
-        return null;
+        return getJsonObject(outputFile);
     }
 
     public static String extractSourceName(String loc) {
@@ -244,21 +231,21 @@ public class CamelRouteDumpAction extends ActionBaseCommand {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) {
+            if (this == o)
                 return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
+            if (o == null || getClass() != o.getClass())
                 return false;
-            }
 
             Row row = (Row) o;
 
-            return location.equals(row.location);
+            if (!Objects.equals(location, row.location))
+                return false;
+            return routeId.equals(row.routeId);
         }
 
         @Override
         public int hashCode() {
-            return location.hashCode();
+            return routeId.hashCode();
         }
     }
 

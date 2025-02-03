@@ -21,15 +21,12 @@ import java.util.List;
 import org.apache.camel.Exchange;
 import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.UnitOfWorkHelper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class AbstractSynchronizedExchange implements SynchronizedExchange {
-    private static final Logger LOG = LoggerFactory.getLogger(SynchronizedExchange.class);
     protected final List<Synchronization> synchronizations;
     private final Exchange exchange;
 
-    public AbstractSynchronizedExchange(Exchange exchange) {
+    protected AbstractSynchronizedExchange(Exchange exchange) {
         this.exchange = exchange;
         synchronizations = exchange.getExchangeExtension().handoverCompletions();
     }

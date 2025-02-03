@@ -116,7 +116,7 @@ public class CxfProducerTest {
 
         org.apache.camel.Message out = exchange.getMessage();
         String result = out.getBody(String.class);
-        LOG.info("Received output text: " + result);
+        LOG.info("Received output text: {}", result);
         Map<String, Object> responseContext = CastUtils.cast((Map<?, ?>) out.getHeader(Client.RESPONSE_CONTEXT));
         assertNotNull(responseContext);
         assertEquals("UTF-8", responseContext.get(org.apache.cxf.message.Message.ENCODING),
@@ -136,17 +136,17 @@ public class CxfProducerTest {
     public void testInvokingAWrongServer() throws Exception {
         Exchange reply = sendSimpleMessage(getWrongEndpointUri());
         assertNotNull(reply.getException(), "We should get the exception here");
-        assertTrue(reply.getException() instanceof ConnectException);
+        assertTrue(reply.getException().getCause() instanceof ConnectException);
 
         //Test the data format PAYLOAD
         reply = sendSimpleMessageWithPayloadMessage(getWrongEndpointUri() + "&dataFormat=PAYLOAD");
         assertNotNull(reply.getException(), "We should get the exception here");
-        assertTrue(reply.getException() instanceof ConnectException);
+        assertTrue(reply.getException().getCause() instanceof ConnectException);
 
         //Test the data format MESSAGE
         reply = sendSimpleMessageWithRawMessage(getWrongEndpointUri() + "&dataFormat=RAW");
         assertNotNull(reply.getException(), "We should get the exception here");
-        assertTrue(reply.getException() instanceof ConnectException);
+        assertTrue(reply.getException().getCause() instanceof ConnectException);
     }
 
     @Test
@@ -155,7 +155,7 @@ public class CxfProducerTest {
 
         org.apache.camel.Message out = exchange.getMessage();
         String result = out.getBody(String.class);
-        LOG.info("Received output text: " + result);
+        LOG.info("Received output text: {}", result);
         Map<String, Object> responseContext = CastUtils.cast((Map<?, ?>) out.getHeader(Client.RESPONSE_CONTEXT));
         assertNotNull(responseContext);
         assertEquals("{http://apache.org/hello_world_soap_http}greetMe",

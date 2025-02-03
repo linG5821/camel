@@ -23,18 +23,13 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.10.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-kafka</artifactId>
     <packaging>jar</packaging>
     <name>Camel :: Kafka</name>
     <description>Camel Kafka support</description>
-
-    <properties>
-        <!-- Kafka is not available on this platform -->
-        <skipITs.ppc64le>true</skipITs.ppc64le>
-    </properties>
 
     <dependencies>
 
@@ -46,6 +41,10 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-health</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-console</artifactId>
         </dependency>
 
         <!-- kafka java client -->
@@ -62,20 +61,13 @@
 
         <!-- test -->
         <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <version>${awaitility-version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>org.hamcrest</groupId>
             <artifactId>hamcrest</artifactId>
             <version>${hamcrest-version}</version>
             <scope>test</scope>
         </dependency>
 
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-core</artifactId>
             <version>${project.version}</version>
@@ -83,7 +75,7 @@
             <type>test-jar</type>
         </dependency>
 
-        <dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-kafka</artifactId>
             <version>${project.version}</version>
@@ -135,71 +127,29 @@
             <version>${mockito-version}</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>${commons-lang3-version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <configuration>
-                    <skipITs>${skipITs}</skipITs>
-                    <skipTests>${skipTests}</skipTests>
-                    <reuseForks>true</reuseForks>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>integration-test</id>
-                        <goals>
-                            <goal>integration-test</goal>
-                        </goals>
-                        <configuration>
-                            <skipITs>${skipITs}</skipITs>
-                            <forkCount>1</forkCount>
-                            <reuseForks>true</reuseForks>
-                            <excludedGroups>health,idempotent</excludedGroups>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>serials-test</id>
-                        <goals>
-                            <goal>integration-test</goal>
-                        </goals>
-                        <configuration>
-                            <reuseForks>false</reuseForks>
-                            <groups>health,idempotent</groups>
-                            <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-
     <profiles>
-        <!-- Ensures camel-kafka does not run any tests during the release -->
         <profile>
-            <id>release</id>
+            <!-- This is needed only for camel-kafka to skip itests selected in the backwards-compatibility profile -->
+            <id>quickly</id>
+            <activation>
+                <property>
+                    <name>quickly</name>
+                </property>
+            </activation>
             <properties>
                 <skipITs>true</skipITs>
                 <skipTests>true</skipTests>
             </properties>
         </profile>
         <profile>
-            <id>backwards-compatibility</id>
+            <id>full</id>
             <activation>
-                <os>
-                    <arch>amd64</arch>
-                </os>
+                <property>
+                    <name>!quickly</name>
+                </property>
             </activation>
-
             <build>
                 <plugins>
                     <plugin>
@@ -207,23 +157,30 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <skipITs>${skipITs}</skipITs>
-                            <reuseForks>true</reuseForks>
+                            <skipTests>${skipTests}</skipTests>
                         </configuration>
                         <executions>
                             <execution>
-                                <id>kafka-2</id>
+                                <id>integration-test</id>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
                                 <configuration>
                                     <skipITs>${skipITs}</skipITs>
-                                    <systemPropertyVariables>
-                                        <kafka.instance.type>local-kafka2-container</kafka.instance.type>
-                                    </systemPropertyVariables>
-                                    <reuseForks>true</reuseForks>
-                                    <reportNameSuffix>kafka-2</reportNameSuffix>
-                                    <excludedGroups>non-abstract,health,idempotent</excludedGroups>
+                                    <excludedGroups>health,idempotent,breakOnFirstError</excludedGroups>
                                 </configuration>
+                            </execution>
+                            <execution>
+                                <id>serials-test</id>
                                 <goals>
                                     <goal>integration-test</goal>
                                 </goals>
+                                <configuration>
+                                    <reuseForks>false</reuseForks>
+                                    <groups>health,idempotent,breakOnFirstError</groups>
+                                    <forkedProcessTimeoutInSeconds>1200</forkedProcessTimeoutInSeconds>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

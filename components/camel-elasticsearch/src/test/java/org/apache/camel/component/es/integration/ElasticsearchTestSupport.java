@@ -27,6 +27,7 @@ import org.apache.camel.component.es.ElasticsearchComponent;
 import org.apache.camel.test.infra.elasticsearch.services.ElasticSearchService;
 import org.apache.camel.test.infra.elasticsearch.services.ElasticSearchServiceFactory;
 import org.apache.camel.test.junit5.CamelTestSupport;
+import org.apache.camel.test.junit5.TestNameExtension;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -34,6 +35,7 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
@@ -45,6 +47,10 @@ public class ElasticsearchTestSupport extends CamelTestSupport {
     @RegisterExtension
     protected static ElasticSearchService service = ElasticSearchServiceFactory.createSingletonService();
 
+    @RegisterExtension
+    @Order(10)
+    TestNameExtension testNameExtension = new TestNameExtension();
+
     protected static String clusterName = "docker-cluster";
     protected static RestClient restClient;
     protected static ElasticsearchClient client;
@@ -53,8 +59,9 @@ public class ElasticsearchTestSupport extends CamelTestSupport {
     @Override
     protected void setupResources() throws Exception {
         super.setupResources();
+        String scheme = service.getSslContext().isPresent() ? "https" : "http";
         HttpHost host
-                = new HttpHost(service.getElasticSearchHost(), service.getPort(), "https");
+                = new HttpHost(service.getElasticSearchHost(), service.getPort(), scheme);
         final RestClientBuilder builder = RestClient.builder(host);
         final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(AuthScope.ANY,
@@ -62,7 +69,9 @@ public class ElasticsearchTestSupport extends CamelTestSupport {
         builder.setHttpClientConfigCallback(
                 httpClientBuilder -> {
                     httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
-                    httpClientBuilder.setSSLContext(service.getSslContext().orElseThrow());
+                    service.getSslContext().ifPresent(sslContext -> {
+                        httpClientBuilder.setSSLContext(sslContext);
+                    });
                     return httpClientBuilder;
                 });
         restClient = builder.build();
@@ -80,11 +89,13 @@ public class ElasticsearchTestSupport extends CamelTestSupport {
     @Override
     protected CamelContext createCamelContext() throws Exception {
         final ElasticsearchComponent elasticsearchComponent = new ElasticsearchComponent();
-        elasticsearchComponent.setEnableSSL(true);
+        elasticsearchComponent.setEnableSSL(service.getSslContext().isPresent());
         elasticsearchComponent.setHostAddresses(service.getHttpHostAddress());
         elasticsearchComponent.setUser(service.getUsername());
         elasticsearchComponent.setPassword(service.getPassword());
-        elasticsearchComponent.setCertificatePath("file:%s".formatted(service.getCertificatePath().orElseThrow()));
+        service.getCertificatePath().ifPresent(certificatePath -> {
+            elasticsearchComponent.setCertificatePath("file:%s".formatted(certificatePath));
+        });
 
         CamelContext context = super.createCamelContext();
         context.addComponent("elasticsearch", elasticsearchComponent);
@@ -119,7 +130,7 @@ public class ElasticsearchTestSupport extends CamelTestSupport {
 
     String createPrefix() {
         // make use of the test method name to avoid collision
-        return getCurrentTestName().toLowerCase() + "-";
+        return testNameExtension.getCurrentTestName().toLowerCase() + "-";
     }
 
     RestClient getClient() {

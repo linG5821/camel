@@ -15,7 +15,13 @@ based on pattern syntax.
 include::partial$eip-options.adoc[]
 // eip options: END
 
-== Remove Properties by pattern
+== Exchange properties
+
+// eip exchangeProperties: START
+include::partial$eip-exchangeProperties.adoc[]
+// eip exchangeProperties: END
+
+== Remove Exchange Properties by pattern
 
 The Remove Properties EIP supports pattern
 matching by the following rules in the given order:
@@ -25,6 +31,8 @@ matching by the following rules in the given order:
 * match by regular expression
 
 == Remove all properties
+
+For example to remove all properties use * as follows:
 
 [tabs]
 ====
@@ -47,9 +55,22 @@ XML::
   <to uri="mock:result"/>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: seda:b
+    steps:
+      - removeProperties:
+          pattern: "*"
+      - to:
+          uri: mock:result
+----
 ====
 
-NOTE: Be careful to remove all exchange properties as Camel uses internally exchange properties
+IMPORTANT: Be careful to remove all exchange properties as Camel uses internally exchange properties
 to keep state on the `Exchange` during routing. So use this with care. You should generally only remove
 custom exchange properties that are under your own control.
 
@@ -78,13 +99,26 @@ XML::
   <to uri="mock:result"/>
 </route>
 ----
+
+YAML::
++
+[source,yaml]
+----
+- from:
+    uri: seda:b
+    steps:
+      - removeProperties:
+          pattern: "Foo*"
+      - to:
+          uri: mock:result
+----
 ====
 
 == See Also
 
 Camel provides the following EIPs for removing headers or exchange properties:
 
-- xref:removeHeader-eip.adoc[Remove Header] - To remove a single header
-- xref:removeHeaders-eip.adoc[Remove Headers] - To remove one or more message headers
-- xref:removeProperty-eip.adoc[Remove Property] - To remove a single exchange property
-- xref:removeProperties-eip.adoc[Remove Properties] - To remove one or more exchange properties
+- xref:removeHeader-eip.adoc[Remove Header]: To remove a single header
+- xref:removeHeaders-eip.adoc[Remove Headers]: To remove one or more message headers
+- xref:removeProperty-eip.adoc[Remove Property]: To remove a single exchange property
+- xref:removeProperties-eip.adoc[Remove Properties]: To remove one or more exchange properties

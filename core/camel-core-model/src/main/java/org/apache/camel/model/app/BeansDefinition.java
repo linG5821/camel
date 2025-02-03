@@ -23,34 +23,38 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAnyElement;
 import jakarta.xml.bind.annotation.XmlElement;
+import jakarta.xml.bind.annotation.XmlElementWrapper;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlType;
 
 import org.w3c.dom.Element;
 
+import org.apache.camel.model.BeanFactoryDefinition;
+import org.apache.camel.model.DataFormatDefinition;
 import org.apache.camel.model.RouteConfigurationDefinition;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.model.RouteTemplateDefinition;
 import org.apache.camel.model.TemplatedRouteDefinition;
+import org.apache.camel.model.rest.RestConfigurationDefinition;
 import org.apache.camel.model.rest.RestDefinition;
 import org.apache.camel.spi.Metadata;
+import org.apache.camel.spi.annotations.DslProperty;
 import org.apache.camel.spi.annotations.ExternalSchemaElement;
 
 /**
- * <p>
- * A groupping POJO (and related XML root element) that's historically associated with "entire application" (or its
- * distinguished fragment).
- * </p>
- * <p>
- * This class is not meant to be used with Camel Java DSL, but it's needed to generate XML Schema and MX parser methods.
- * </p>
+ * Container for beans, routes, and more.
+ *
+ * Important this is only supported when using XML DSL with camel-xml-io-dsl. This is NOT for the classic old Spring XML
+ * DSL used by Camel 1.x/2.x.
  */
 @Metadata(label = "configuration")
 @XmlRootElement(name = "beans")
 @XmlType(propOrder = {
         "componentScanning",
         "beans",
-        "springBeans",
+        "springOrBlueprintBeans",
+        "dataFormats",
+        "restConfigurations",
         "rests",
         "routeConfigurations",
         "routeTemplates",
@@ -60,26 +64,26 @@ import org.apache.camel.spi.annotations.ExternalSchemaElement;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class BeansDefinition {
 
-    /**
-     * Component scanning definition(s). But unlike package/packageScan/contextScan, we're not scanning only for
-     * org.apache.camel.builder.RouteBuilder.
-     */
+    // This class is not meant to be used with Camel Java DSL, but it's needed to generate XML Schema and MX parser methods
+
     @XmlElement(name = "component-scan")
     private List<ComponentScanDefinition> componentScanning = new ArrayList<>();
 
     // this is a place for <bean> element definition, without conflicting with <bean> elements referring
     // to "bean processors"
-
     @XmlElement(name = "bean")
-    private List<RegistryBeanDefinition> beans = new ArrayList<>();
+    private List<BeanFactoryDefinition> beans = new ArrayList<>();
 
-    // this is the only way I found to generate usable Schema without imports, while allowing elements
-    // from different namespaces
-    @ExternalSchemaElement(names = { "beans", "bean", "alias" },
+    // support for legacy spring <beans> and blueprint <bean> files to be parsed and loaded
+    // for migration and tooling effort (need to be in a single @XmlAnyElement as otherwise
+    // this causes camel-spring-xml to generate an invalid XSD
+    @ExternalSchemaElement(names = { "beans", "bean", "alias" }, names2 = "bean",
                            namespace = "http://www.springframework.org/schema/beans",
-                           documentElement = "beans")
+                           namespace2 = "http://www.osgi.org/xmlns/blueprint/v1.0.0",
+                           documentElement = "beans",
+                           documentElement2 = "blueprint")
     @XmlAnyElement
-    private List<Element> springBeans = new ArrayList<>();
+    private List<Element> springOrBlueprintBeans = new ArrayList<>();
 
     // the order comes from <camelContext> (org.apache.camel.spring.xml.CamelContextFactoryBean)
     // to make things less confusing, as it's not easy to simply tell JAXB to use <xsd:choice maxOccurs="unbounded">
@@ -88,6 +92,12 @@ public class BeansDefinition {
     // initially we'll be supporting only these elements which are parsed by
     // org.apache.camel.dsl.xml.io.XmlRoutesBuilderLoader in camel-xml-io-dsl
 
+    @XmlElementWrapper(name = "dataFormats")
+    @XmlElement(name = "dataFormat")
+    @DslProperty(name = "dataFormats") // yaml-dsl
+    private List<DataFormatDefinition> dataFormats;
+    @XmlElement(name = "restConfiguration")
+    private List<RestConfigurationDefinition> restConfigurations = new ArrayList<>();
     @XmlElement(name = "rest")
     private List<RestDefinition> rests = new ArrayList<>();
     @XmlElement(name = "routeConfiguration")
@@ -103,30 +113,54 @@ public class BeansDefinition {
         return componentScanning;
     }
 
+    /**
+     * Component scanning that can auto-discover Camel route builders from the classpath.
+     */
     public void setComponentScanning(List<ComponentScanDefinition> componentScanning) {
         this.componentScanning = componentScanning;
     }
 
-    public List<RegistryBeanDefinition> getBeans() {
+    public List<BeanFactoryDefinition> getBeans() {
         return beans;
     }
 
-    public void setBeans(List<RegistryBeanDefinition> beans) {
+    /**
+     * List of bean
+     */
+    public void setBeans(List<BeanFactoryDefinition> beans) {
         this.beans = beans;
     }
 
-    public List<Element> getSpringBeans() {
-        return springBeans;
+    public List<Element> getSpringOrBlueprintBeans() {
+        return springOrBlueprintBeans;
     }
 
-    public void setSpringBeans(List<Element> springBeans) {
-        this.springBeans = springBeans;
+    /**
+     * Support for legacy Spring beans and Blueprint bean files to be parsed and loaded for migration and tooling
+     * effort.
+     */
+    public void setSpringOrBlueprintBeans(List<Element> springOrBlueprintBeans) {
+        this.springOrBlueprintBeans = springOrBlueprintBeans;
+    }
+
+    public List<RestConfigurationDefinition> getRestConfigurations() {
+        return restConfigurations;
+    }
+
+    /**
+     * Camel Rest DSL Configuration
+     */
+    public void setRestConfigurations(List<RestConfigurationDefinition> restConfigs) {
+        this.restConfigurations = restConfigs;
     }
 
     public List<RestDefinition> getRests() {
         return rests;
     }
 
+    /**
+     * Camel Rest DSL
+     */
     public void setRests(List<RestDefinition> rests) {
         this.rests = rests;
     }
@@ -135,6 +169,9 @@ public class BeansDefinition {
         return routeConfigurations;
     }
 
+    /**
+     * Camel route configurations
+     */
     public void setRouteConfigurations(List<RouteConfigurationDefinition> routeConfigurations) {
         this.routeConfigurations = routeConfigurations;
     }
@@ -143,6 +180,9 @@ public class BeansDefinition {
         return routeTemplates;
     }
 
+    /**
+     * Camel route templates
+     */
     public void setRouteTemplates(List<RouteTemplateDefinition> routeTemplates) {
         this.routeTemplates = routeTemplates;
     }
@@ -151,6 +191,9 @@ public class BeansDefinition {
         return templatedRoutes;
     }
 
+    /**
+     * Camel routes to be created from template
+     */
     public void setTemplatedRoutes(List<TemplatedRouteDefinition> templatedRoutes) {
         this.templatedRoutes = templatedRoutes;
     }
@@ -159,8 +202,22 @@ public class BeansDefinition {
         return routes;
     }
 
+    /**
+     * Camel routes
+     */
     public void setRoutes(List<RouteDefinition> routes) {
         this.routes = routes;
+    }
+
+    public List<DataFormatDefinition> getDataFormats() {
+        return dataFormats;
+    }
+
+    /**
+     * Camel data formats
+     */
+    public void setDataFormats(List<DataFormatDefinition> dataFormats) {
+        this.dataFormats = dataFormats;
     }
 
 }

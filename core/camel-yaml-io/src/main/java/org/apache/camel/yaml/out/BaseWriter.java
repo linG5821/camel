@@ -22,15 +22,45 @@ import java.util.List;
 
 import org.w3c.dom.Element;
 
+import org.apache.camel.CamelContext;
+import org.apache.camel.CamelContextAware;
+import org.apache.camel.support.service.ServiceHelper;
+import org.apache.camel.support.service.ServiceSupport;
+import org.apache.camel.util.ObjectHelper;
 import org.apache.camel.yaml.io.YamlWriter;
 
-public class BaseWriter {
+public class BaseWriter extends ServiceSupport implements CamelContextAware {
 
     protected final YamlWriter writer;
 
     public BaseWriter(Writer writer, String namespace) throws IOException {
         this.writer = new YamlWriter(writer);
         // namespace is only for XML
+    }
+
+    @Override
+    public CamelContext getCamelContext() {
+        return writer.getCamelContext();
+    }
+
+    @Override
+    public void setCamelContext(CamelContext camelContext) {
+        this.writer.setCamelContext(camelContext);
+    }
+
+    public void setUriAsParameters(boolean uriAsParameters) {
+        this.writer.setUriAsParameters(uriAsParameters);
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        ObjectHelper.notNull(getCamelContext(), "CamelContext", this);
+        ServiceHelper.startService(this.writer);
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        ServiceHelper.stopService(this.writer);
     }
 
     public String toYaml() {

@@ -77,7 +77,6 @@ public class ManagedValidatorRegistry extends ManagedService implements ManagedV
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public TabularData listValidators() {
         try {
             TabularData answer = new TabularDataSupport(CamelOpenMBeanTypes.listValidatorsTabularType());

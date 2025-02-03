@@ -41,10 +41,11 @@ public abstract class RemoteFileConsumer<T> extends GenericFileConsumer<T> {
     protected transient boolean loggedIn;
     protected transient boolean loggedInWarning;
 
-    public RemoteFileConsumer(RemoteFileEndpoint<T> endpoint, Processor processor, RemoteFileOperations<T> operations,
-                              GenericFileProcessStrategy processStrategy) {
+    protected RemoteFileConsumer(RemoteFileEndpoint<T> endpoint, Processor processor, RemoteFileOperations<T> operations,
+                                 GenericFileProcessStrategy processStrategy) {
         super(endpoint, processor, operations, processStrategy);
         this.setPollStrategy(new RemoteFilePollingConsumerPollStrategy());
+        this.setRetrieveFile(endpoint.isDownload());
     }
 
     @Override
@@ -93,6 +94,9 @@ public abstract class RemoteFileConsumer<T> extends GenericFileConsumer<T> {
             // need to log the failed log again
             loggedInWarning = false;
         }
+
+        // we are logged in so lets mark the consumer as ready
+        forceConsumerAsReady();
 
         return true;
     }
@@ -148,11 +152,6 @@ public abstract class RemoteFileConsumer<T> extends GenericFileConsumer<T> {
         }
 
         return super.processExchange(exchange);
-    }
-
-    @Override
-    protected boolean isRetrieveFile() {
-        return getEndpoint().isDownload();
     }
 
     /**
@@ -266,8 +265,8 @@ public abstract class RemoteFileConsumer<T> extends GenericFileConsumer<T> {
                 return true;
             } else {
                 LOG.trace("Not ignoring file error {} for {}", e.getMessage(), absolutePath);
-                if (e instanceof GenericFileOperationFailedException) {
-                    throw (GenericFileOperationFailedException) e;
+                if (e instanceof GenericFileOperationFailedException genericFileOperationFailedException) {
+                    throw genericFileOperationFailedException;
                 } else {
                     throw new GenericFileOperationFailedException(
                             "Cannot poll sub-directory: " + absolutePath + " from: " + endpoint, e);

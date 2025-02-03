@@ -28,7 +28,6 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.test.junit5.TestSupport.assertIsInstanceOf;
@@ -36,14 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class MailConvertersTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
-    private static final MailboxUser james = Mailbox.getOrCreateUser("james", "secret");
+
+    private MailboxUser james;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() {
         Mailbox.clearAll();
-        super.setUp();
+        james = Mailbox.getOrCreateUser("james", "secret");
     }
 
     @Test

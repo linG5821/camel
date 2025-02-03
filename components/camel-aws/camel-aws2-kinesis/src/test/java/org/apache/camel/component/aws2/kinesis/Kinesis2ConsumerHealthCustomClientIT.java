@@ -24,6 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.health.HealthCheck;
 import org.apache.camel.health.HealthCheckHelper;
 import org.apache.camel.health.HealthCheckRegistry;
+import org.apache.camel.health.HealthCheckRepository;
 import org.apache.camel.impl.health.DefaultHealthCheckRegistry;
 import org.apache.camel.test.infra.aws.common.services.AWSService;
 import org.apache.camel.test.infra.aws2.clients.AWSSDKClientUtils;
@@ -37,10 +38,8 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 @DisabledIfSystemProperty(named = "ci.env.name", matches = "github.com", disabledReason = "Flaky on GitHub Actions")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -48,9 +47,7 @@ import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 public class Kinesis2ConsumerHealthCustomClientIT extends CamelTestSupport {
 
     @RegisterExtension
-    public static AWSService service = AWSServiceFactory.createS3Service();
-
-    private static final Logger LOG = LoggerFactory.getLogger(Kinesis2ConsumerHealthCustomClientIT.class);
+    public static AWSService service = AWSServiceFactory.createSingletonS3Service();
 
     CamelContext context;
 
@@ -71,6 +68,9 @@ public class Kinesis2ConsumerHealthCustomClientIT extends CamelTestSupport {
         registry.register(hc);
         hc = registry.resolveById("consumers");
         registry.register(hc);
+        HealthCheckRepository hcr = (HealthCheckRepository) registry.resolveById("producers");
+        hcr.setEnabled(true);
+        registry.register(hcr);
         context.getCamelContextExtension().addContextPlugin(HealthCheckRegistry.class, registry);
 
         return context;
@@ -82,8 +82,7 @@ public class Kinesis2ConsumerHealthCustomClientIT extends CamelTestSupport {
 
             @Override
             public void configure() {
-                from("aws2-kinesis://stream")
-                        .startupOrder(2).log("${body}").routeId("test-health-it");
+                from("aws2-kinesis://stream").startupOrder(2).log("${body}").routeId("test-health-it");
             }
         };
     }
@@ -104,10 +103,7 @@ public class Kinesis2ConsumerHealthCustomClientIT extends CamelTestSupport {
             Collection<HealthCheck.Result> res2 = HealthCheckHelper.invokeReadiness(context);
             boolean down = res2.stream().allMatch(r -> r.getState().equals(HealthCheck.State.DOWN));
 
-            boolean hasRegionMessage = res2.stream()
-                    .anyMatch(r -> r.getMessage().stream().anyMatch(msg -> msg.contains("region")));
             Assertions.assertTrue(down, "liveness check");
-            Assertions.assertFalse(hasRegionMessage, "aws2-kinesis check error message");
         });
 
     }

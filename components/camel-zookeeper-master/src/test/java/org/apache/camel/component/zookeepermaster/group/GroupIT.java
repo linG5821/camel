@@ -28,13 +28,15 @@ import org.apache.camel.component.zookeepermaster.group.internal.ChildData;
 import org.apache.camel.component.zookeepermaster.group.internal.ZooKeeperGroup;
 import org.apache.camel.test.AvailablePortFinder;
 import org.apache.camel.test.infra.zookeeper.services.ZooKeeperContainer;
+import org.apache.camel.test.infra.zookeeper.services.ZooKeeperService;
+import org.apache.camel.test.infra.zookeeper.services.ZooKeeperServiceFactory;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryNTimes;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
@@ -45,8 +47,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(ZookeeprContainer.class)
 public class GroupIT {
+    @RegisterExtension
+    static ZooKeeperService service = ZooKeeperServiceFactory.createService();
+
     private static final Logger LOGGER = LoggerFactory.getLogger(GroupIT.class);
 
     private static String beforeTmpdir;
@@ -117,7 +121,7 @@ public class GroupIT {
 
     @Test
     public void testOrder() throws Exception {
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
 
         CuratorFramework curator = CuratorFrameworkFactory.builder()
                 .connectString("localhost:" + port)
@@ -179,7 +183,7 @@ public class GroupIT {
 
     @Test
     public void testJoinAfterConnect() throws Exception {
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
 
         CuratorFramework curator = CuratorFrameworkFactory.builder()
                 .connectString("localhost:" + port)
@@ -221,7 +225,7 @@ public class GroupIT {
 
             try {
                 deleteDirectory(dataDir.toFile());
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 // ignore
             }
         }
@@ -229,7 +233,7 @@ public class GroupIT {
 
     @Test
     public void testJoinBeforeConnect() throws Exception {
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
 
         CuratorFramework curator = CuratorFrameworkFactory.builder()
                 .connectString("localhost:" + port)
@@ -273,7 +277,7 @@ public class GroupIT {
 
     @Test
     public void testRejoinAfterDisconnect() throws Exception {
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
 
         CuratorFramework curator = CuratorFrameworkFactory.builder()
                 .connectString("localhost:" + port)
@@ -332,7 +336,7 @@ public class GroupIT {
     //(see  https://github.com/jboss-fuse/fuse/issues/133)
     @Test
     public void testGroupClose() throws Exception {
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
         ZooKeeperContainer container = null;
         Path dataDir = Files.createTempDirectory("zk-");
 
@@ -380,7 +384,7 @@ public class GroupIT {
     @Test
     public void testAddFieldIgnoredOnParse() throws Exception {
 
-        int port = AvailablePortFinder.getNextAvailable();
+        int port = AvailablePortFinder.getNextRandomAvailable();
         ZooKeeperContainer container = null;
         Path dataDir = Files.createTempDirectory("zk-");
 

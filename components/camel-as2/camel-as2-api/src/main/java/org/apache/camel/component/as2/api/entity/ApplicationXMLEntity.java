@@ -16,15 +16,21 @@
  */
 package org.apache.camel.component.as2.api.entity;
 
+import java.io.IOException;
+
 import org.apache.camel.component.as2.api.AS2MediaType;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ContentType;
 
 public class ApplicationXMLEntity extends ApplicationEntity {
 
-    public ApplicationXMLEntity(String content, String charset, String contentTransferEncoding,
+    public ApplicationXMLEntity(byte[] content, String charset, String contentTransferEncoding,
                                 boolean isMainBody, String filename) {
         super(content, ContentType.create(AS2MediaType.APPLICATION_XML, charset), contentTransferEncoding, isMainBody,
               filename);
     }
 
+    @Override
+    public void close() throws IOException {
+        // do nothing
+    }
 }

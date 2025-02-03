@@ -20,10 +20,13 @@ name: PR Comment Build
 on:
   issue_comment:
     types: [created]
+permissions:  
+  contents: read
+
 jobs:
   pr_commented:
     name: PR comment
-    if: ${{ github.repository == 'apache/camel' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/component-test') }}
+    if: ${{ github.repository == 'apache/camel' && github.event.issue.pull_request && (github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'CONTRIBUTOR') && startsWith(github.event.comment.body, '/component-test') }}
     permissions:
       pull-requests: write # to comment on a pull request
       actions: read # to download artifact
@@ -32,24 +35,40 @@ jobs:
       matrix:
         java: [ '17' ]
     steps:
-      - name: Retrieve sha
-        uses: actions/github-script@v6
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const pr = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: context.issue.number
-            });
-            core.exportVariable('pr_sha', pr.data.head.sha)
-      - uses: actions/checkout@v3
+          persist-credentials: false
+          submodules: recursive
+      - name: Check Permission
+        uses: actions-cool/check-user-permission@7b90a27f92f3961b368376107661682c441f6103
+      - name: Retrieve sha
+        id: pr
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          COMMENT_AT: ${{ github.event.comment.created_at }}
+        run: |
+          pr="$(gh api /repos/${GH_REPO}/pulls/${PR_NUMBER})"
+          head_sha="$(echo "$pr" | jq -r .head.sha)"
+          pushed_at="$(echo "$pr" | jq -r .pushed_at)"
+          if [[ $(date -d "$pushed_at" +%s) -gt $(date -d "$COMMENT_AT" +%s) ]]; then
+              exit 1
+          fi
+          echo "pr_sha=$head_sha" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ env.pr_sha }}
+          submodules: recursive
+      - uses: peter-evans/create-or-update-comment@c9fcb64660bc90ec1cc535646af190c992007c32
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            :robot: The Apache Camel test robot will run the tests for you :+1:
       - id: install-packages
         uses: ./.github/actions/install-packages
       - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
@@ -58,8 +77,8 @@ jobs:
         name: Component test execution
         uses: ./.github/actions/component-test
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.run_id }}
           pr-id: ${{ github.event.issue.number }}
           comment-id: ${{ github.event.comment.id }}
           comment-body: ${{ github.event.comment.body }}
+          artifact-upload-suffix: java-${{ matrix.java }}

@@ -31,7 +31,6 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.support.processor.idempotent.MemoryIdempotentRepository;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,17 +39,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Unit test for idempotent repository.
  */
 public class MailIdempotentRepositoryDuplicateTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     protected static final MailboxUser jones = Mailbox.getOrCreateUser("jones", "secret");
 
     @BindToRegistry("myRepo")
     MemoryIdempotentRepository myRepo = new MemoryIdempotentRepository();
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
+        myRepo.start();
         prepareMailbox();
-        super.setUp();
     }
 
     @Test

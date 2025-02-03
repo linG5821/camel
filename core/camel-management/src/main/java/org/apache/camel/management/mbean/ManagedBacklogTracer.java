@@ -172,6 +172,16 @@ public class ManagedBacklogTracer implements ManagedBacklogTracerMBean {
     }
 
     @Override
+    public boolean isIncludeExchangeVariables() {
+        return backlogTracer.isIncludeExchangeVariables();
+    }
+
+    @Override
+    public void setIncludeExchangeVariables(boolean includeExchangeVariables) {
+        backlogTracer.setIncludeExchangeVariables(includeExchangeVariables);
+    }
+
+    @Override
     public boolean isTraceRests() {
         return backlogTracer.isTraceRests();
     }
@@ -197,8 +207,18 @@ public class ManagedBacklogTracer implements ManagedBacklogTracerMBean {
     }
 
     @Override
+    public String dumpTracedMessagesAsJSon(String nodeOrRouteId) {
+        return backlogTracer.dumpTracedMessagesAsJSon(nodeOrRouteId);
+    }
+
+    @Override
     public String dumpAllTracedMessagesAsXml() {
         return backlogTracer.dumpAllTracedMessagesAsXml();
+    }
+
+    @Override
+    public String dumpAllTracedMessagesAsJSon() {
+        return backlogTracer.dumpAllTracedMessagesAsJSon();
     }
 
     @Override

@@ -25,11 +25,12 @@ import org.apache.camel.ProducerTemplate;
 import org.apache.camel.Route;
 import org.apache.camel.component.file.remote.SftpEndpoint;
 import org.apache.camel.component.mock.MockEndpoint;
-import org.apache.camel.component.zookeepermaster.group.ZookeeprContainer;
-import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.test.infra.zookeeper.services.ZooKeeperService;
+import org.apache.camel.test.infra.zookeeper.services.ZooKeeperServiceFactory;
 import org.apache.camel.test.spring.junit5.CamelSpringTest;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 
@@ -37,15 +38,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @CamelSpringTest
 @ContextConfiguration
-@ExtendWith(ZookeeprContainer.class)
 public class MasterEndpointIT {
+
+    @RegisterExtension
+    static ZooKeeperService service = ZooKeeperServiceFactory.createService();
+
     @Autowired
     protected CamelContext camelContext;
 
     @EndpointInject("mock:results")
     protected MockEndpoint resultEndpoint;
 
-    @Produce("seda:bar")
+    @Produce("direct:bar")
     protected ProducerTemplate template;
 
     @Test
@@ -54,14 +58,14 @@ public class MasterEndpointIT {
         List<Route> registeredRoutes = camelContext.getRoutes();
         assertEquals(1, registeredRoutes.size(), "number of routes");
         MasterEndpoint endpoint = (MasterEndpoint) registeredRoutes.get(0).getEndpoint();
-        assertEquals("seda:bar", endpoint.getConsumerEndpointUri(), "wrong endpoint uri");
+        assertEquals("direct:bar", endpoint.getConsumerEndpointUri(), "wrong endpoint uri");
 
         String expectedBody = "<matched/>";
 
         resultEndpoint.expectedBodiesReceived(expectedBody);
 
-        // lets wait for the entry to be registered...
-        Thread.sleep(5000);
+        MasterConsumer masterConsumer = (MasterConsumer) camelContext.getRoute("zookeeper-master-to-direct").getConsumer();
+        Awaitility.await().until(() -> masterConsumer.isMaster() && masterConsumer.isConnected());
 
         template.sendBodyAndHeader(expectedBody, "foo", "bar");
 
@@ -73,8 +77,7 @@ public class MasterEndpointIT {
         final String uri
                 = "zookeeper-master://name:sftp://myhost/inbox?password=RAW(_BEFORE_AMPERSAND_&_AFTER_AMPERSAND_)&username=jdoe";
 
-        DefaultCamelContext ctx = new DefaultCamelContext();
-        MasterEndpoint master = (MasterEndpoint) ctx.getEndpoint(uri);
+        MasterEndpoint master = (MasterEndpoint) camelContext.getEndpoint(uri);
         SftpEndpoint sftp = (SftpEndpoint) master.getEndpoint();
 
         assertEquals("_BEFORE_AMPERSAND_&_AFTER_AMPERSAND_", sftp.getConfiguration().getPassword());

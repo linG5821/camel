@@ -49,7 +49,7 @@ public class SnmpOIDPoller extends ScheduledPollConsumer implements ResponseList
 
     private Target target;
     private PDU pdu;
-    private SnmpEndpoint endpoint;
+    private final SnmpEndpoint endpoint;
 
     public SnmpOIDPoller(SnmpEndpoint endpoint, Processor processor) {
         super(endpoint, processor);
@@ -60,7 +60,7 @@ public class SnmpOIDPoller extends ScheduledPollConsumer implements ResponseList
     protected void doStart() throws Exception {
         super.doStart();
 
-        this.targetAddress = GenericAddress.parse(this.endpoint.getAddress());
+        this.targetAddress = GenericAddress.parse(this.endpoint.getServerAddress());
 
         // either tcp or udp
         if ("tcp".equals(endpoint.getProtocol())) {
@@ -78,11 +78,11 @@ public class SnmpOIDPoller extends ScheduledPollConsumer implements ResponseList
 
         // listen to the transport
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Starting OID poller on {} using {} protocol", endpoint.getAddress(), endpoint.getProtocol());
+            LOG.debug("Starting OID poller on {} using {} protocol", endpoint.getServerAddress(), endpoint.getProtocol());
         }
         this.transport.listen();
         if (LOG.isInfoEnabled()) {
-            LOG.info("Started OID poller on {} using {} protocol", endpoint.getAddress(), endpoint.getProtocol());
+            LOG.info("Started OID poller on {} using {} protocol", endpoint.getServerAddress(), endpoint.getProtocol());
         }
     }
 
@@ -114,9 +114,8 @@ public class SnmpOIDPoller extends ScheduledPollConsumer implements ResponseList
         } else {
             TreeUtils treeUtils = new TreeUtils(snmp, new DefaultPDUFactory());
             for (OID oid : this.endpoint.getOids()) {
-                List events = treeUtils.getSubtree(target, new OID(oid));
-                for (Object eventObj : events) {
-                    TreeEvent event = (TreeEvent) eventObj;
+                List<TreeEvent> events = treeUtils.getSubtree(target, new OID(oid));
+                for (TreeEvent event : events) {
                     if (event == null) {
                         LOG.warn("Event is null");
                         continue;
@@ -170,7 +169,7 @@ public class SnmpOIDPoller extends ScheduledPollConsumer implements ResponseList
      */
     public void processPDU(PDU pdu) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Received response event for {} : {}", this.endpoint.getAddress(), pdu);
+            LOG.debug("Received response event for {} : {}", this.endpoint.getServerAddress(), pdu);
         }
         Exchange exchange = endpoint.createExchange(pdu);
         try {

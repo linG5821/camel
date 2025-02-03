@@ -26,7 +26,8 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> The type of the service to be wrapped
  */
-public class SingletonService<T extends TestService> implements ExtensionContext.Store.CloseableResource, TestService {
+public class SingletonService<T extends InfrastructureService>
+        implements ExtensionContext.Store.CloseableResource, TestService {
     private static final Logger LOG = LoggerFactory.getLogger(SingletonService.class);
 
     private final T service;
@@ -45,6 +46,8 @@ public class SingletonService<T extends TestService> implements ExtensionContext
         LOG.debug("Using store: {}", store);
 
         store.getOrComputeIfAbsent(name, this::doInitializeService);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(service::shutdown));
     }
 
     protected SingletonService<T> doInitializeService(String name) {
@@ -69,18 +72,19 @@ public class SingletonService<T extends TestService> implements ExtensionContext
     }
 
     @Override
-    public void initialize() {
+    public final void initialize() {
         service.initialize();
     }
 
     @Override
-    public void shutdown() {
-        service.shutdown();
+    public final void shutdown() {
+        LOG.error("Singleton services must not be shutdown manually");
+        throw new IllegalArgumentException("Singleton services must not be shutdown manually");
     }
 
     @Override
-    public void close() {
-        service.shutdown();
+    public final void close() {
+
     }
 
     protected T getService() {

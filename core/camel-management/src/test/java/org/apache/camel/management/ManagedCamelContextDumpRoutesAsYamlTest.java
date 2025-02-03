@@ -48,7 +48,7 @@ public class ManagedCamelContextDumpRoutesAsYamlTest extends ManagementTestSuppo
         assertTrue(yaml.contains("myOtherRoute"));
         assertTrue(yaml.contains("direct:start"));
         assertTrue(yaml.contains("{{result}}"));
-        assertTrue(yaml.contains("seda:bar"));
+        assertTrue(yaml.contains("seda:bar?size=1234&multipleConsumers=true"));
         assertTrue(yaml.contains("ref:bar"));
         assertTrue(yaml.contains("expression: bar"));
     }
@@ -68,13 +68,13 @@ public class ManagedCamelContextDumpRoutesAsYamlTest extends ManagementTestSuppo
         assertTrue(yaml.contains("myOtherRoute"));
         assertTrue(yaml.contains("direct:start"));
         assertTrue(yaml.contains("mock:result"));
-        assertTrue(yaml.contains("seda:bar"));
+        assertTrue(yaml.contains("seda:bar?size=1234&multipleConsumers=true"));
         assertTrue(yaml.contains("ref:bar"));
         assertTrue(yaml.contains("expression: bar"));
     }
 
     @Test
-    public void testDumpAsYamlResolvePlaceholderDelegateEndpoint() throws Exception {
+    public void testDumpAsYamlUriAsParameters() throws Exception {
         MBeanServer mbeanServer = getMBeanServer();
 
         ObjectName on = getContextObjectName();
@@ -87,19 +87,25 @@ public class ManagedCamelContextDumpRoutesAsYamlTest extends ManagementTestSuppo
         assertTrue(yaml.contains("route"));
         assertTrue(yaml.contains("myRoute"));
         assertTrue(yaml.contains("myOtherRoute"));
-        assertTrue(yaml.contains("direct:start"));
-        assertTrue(yaml.contains("mock:result"));
-        assertTrue(yaml.contains("bar"));
-        assertTrue(yaml.contains("seda:bar"));
-        assertTrue(yaml.contains("mock://bar"));
+        assertTrue(yaml.contains("direct"));
+        assertTrue(yaml.contains("name: start"));
+        assertTrue(yaml.contains("mock"));
+        assertTrue(yaml.contains("name: result"));
+        assertTrue(yaml.contains("ref"));
+        assertTrue(yaml.contains("name: bar"));
+        assertTrue(yaml.contains("seda"));
+        assertTrue(yaml.contains("name: bar"));
+        assertTrue(yaml.contains("parameters:"));
+        assertTrue(yaml.contains("size: 1234"));
+        assertTrue(yaml.contains("multipleConsumers: true"));
         assertTrue(yaml.contains("expression: bar"));
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 Properties props = new Properties();
                 props.put("result", "mock:result");
                 context.getPropertiesComponent().setOverrideProperties(props);
@@ -111,7 +117,7 @@ public class ManagedCamelContextDumpRoutesAsYamlTest extends ManagementTestSuppo
                         .log("Got ${body}")
                         .to("{{result}}");
 
-                from("seda:bar").routeId("myOtherRoute")
+                from("seda:bar?size=1234&multipleConsumers=true").routeId("myOtherRoute")
                         .filter().header("bar")
                         .to("ref:bar")
                         .end();

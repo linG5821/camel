@@ -29,10 +29,12 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.camel.ContextTestSupport;
 import org.apache.camel.Exchange;
@@ -50,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test case for {@link IOConverter}
  */
 public class IOConverterTest extends ContextTestSupport {
+
+    public static final String TEST_FILE_NAME = "hello." + UUID.randomUUID() + ".txt";
 
     private static final byte[] TESTDATA = "My test data".getBytes();
 
@@ -75,8 +79,8 @@ public class IOConverterTest extends ContextTestSupport {
 
     @Test
     public void testToOutputStreamFile() throws Exception {
-        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, "hello.txt");
-        File file = testFile("hello.txt").toFile();
+        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
+        File file = testFile(TEST_FILE_NAME).toFile();
 
         OutputStream os = IOConverter.toOutputStream(file);
         assertIsInstanceOf(BufferedOutputStream.class, os);
@@ -85,8 +89,8 @@ public class IOConverterTest extends ContextTestSupport {
 
     @Test
     public void testToWriterFile() throws Exception {
-        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, "hello.txt");
-        File file = testFile("hello.txt").toFile();
+        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
+        File file = testFile(TEST_FILE_NAME).toFile();
 
         Writer writer = IOConverter.toWriter(file, null);
         assertIsInstanceOf(BufferedWriter.class, writer);
@@ -148,8 +152,8 @@ public class IOConverterTest extends ContextTestSupport {
 
     @Test
     public void testToByteArrayFile() throws Exception {
-        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, "hello.txt");
-        File file = testFile("hello.txt").toFile();
+        template.sendBodyAndHeader(fileUri(), "Hello World", Exchange.FILE_NAME, TEST_FILE_NAME);
+        File file = testFile(TEST_FILE_NAME).toFile();
 
         byte[] data = IOConverter.toByteArray(file);
         assertNotNull(data);
@@ -239,7 +243,7 @@ public class IOConverterTest extends ContextTestSupport {
     @Test
     public void testInputStreamToString() throws Exception {
         String data = "46\u00B037'00\"N\"";
-        ByteArrayInputStream is = new ByteArrayInputStream(data.getBytes("UTF-8"));
+        ByteArrayInputStream is = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
         Exchange exchange = new DefaultExchange(context);
         exchange.setProperty(Exchange.CHARSET_NAME, "UTF-8");
         String result = IOConverter.toString(is, exchange);
@@ -267,7 +271,7 @@ public class IOConverterTest extends ContextTestSupport {
     }
 
     @Test
-    public void testToPathFromFile() throws Exception {
+    public void testToPathFromFile() {
         File file = new File("src/test/resources/log4j2.properties");
         Path p = IOConverter.toPath(file);
         assertNotNull(p);

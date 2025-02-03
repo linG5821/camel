@@ -19,6 +19,8 @@ package org.apache.camel.maven.packaging;
 import java.io.File;
 import java.nio.file.Path;
 
+import javax.inject.Inject;
+
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -27,7 +29,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
-import org.sonatype.plexus.build.incremental.BuildContext;
+import org.codehaus.plexus.build.BuildContext;
 
 /**
  * Generate Model lightweight XML Writer source code.
@@ -38,18 +40,19 @@ public class XmlModelWriterGeneratorMojo extends ModelWriterGeneratorMojo {
 
     public static final String WRITER_PACKAGE = "org.apache.camel.xml.out";
 
-    @Parameter(defaultValue = "${project.basedir}/src/generated/java")
-    protected File sourcesOutputDir;
-
     @Parameter(defaultValue = "${camel-generate-xml-writer}")
     protected boolean generateXmlWriter;
 
+    @Inject
+    public XmlModelWriterGeneratorMojo(MavenProjectHelper projectHelper, BuildContext buildContext) {
+        super(projectHelper, buildContext);
+    }
+
     @Override
-    public void execute(MavenProject project, MavenProjectHelper projectHelper, BuildContext buildContext)
-            throws MojoFailureException, MojoExecutionException {
+    public void execute(MavenProject project) throws MojoFailureException, MojoExecutionException {
         sourcesOutputDir = new File(project.getBasedir(), "src/generated/java");
         generateXmlWriter = Boolean.parseBoolean(project.getProperties().getProperty("camel-generate-xml-writer", "false"));
-        super.execute(project, projectHelper, buildContext);
+        super.execute(project);
     }
 
     @Override

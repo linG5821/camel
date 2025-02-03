@@ -26,6 +26,8 @@ import jakarta.xml.bind.annotation.XmlElementRef;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 
+import org.apache.camel.Exchange;
+import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Predicate;
 import org.apache.camel.spi.AsPredicate;
 import org.apache.camel.spi.Metadata;
@@ -43,11 +45,19 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
 
     @XmlElement(name = "exception")
     private List<String> exceptions = new ArrayList<>();
-    @XmlElement(name = "onWhen")
+    @Metadata(description = "Used for triggering doCatch in specific situations")
+    @XmlElement
     @AsPredicate
-    private WhenDefinition onWhen;
+    private OnWhenDefinition onWhen;
 
     public CatchDefinition() {
+    }
+
+    protected CatchDefinition(CatchDefinition source) {
+        super(source);
+        this.exceptionClasses = source.exceptionClasses;
+        this.exceptions = source.exceptions != null ? new ArrayList<>(source.exceptions) : null;
+        this.onWhen = source.onWhen != null ? source.onWhen.copyDefinition() : null;
     }
 
     public CatchDefinition(List<Class<? extends Throwable>> exceptionClasses) {
@@ -56,6 +66,11 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
 
     public CatchDefinition(Class<? extends Throwable> exceptionType) {
         exception(exceptionType);
+    }
+
+    @Override
+    public CatchDefinition copyDefinition() {
+        return new CatchDefinition(this);
     }
 
     @Override
@@ -92,8 +107,51 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
         this.exceptionClasses = exceptionClasses;
     }
 
+    @Override
+    public boolean acceptDebugger(Exchange exchange) {
+        // only accept if not handled by a previous catch clause handled, and that there is an exception
+        boolean previous = exchange.getProperty(ExchangePropertyKey.EXCEPTION_HANDLED) != null;
+        final Exception e = exchange.getException();
+        return !previous && e != null;
+    }
+
     // Fluent API
     // -------------------------------------------------------------------------
+
+    /**
+     * The exception(s) to catch.
+     *
+     * @param  exception one or more exceptions
+     * @return           the builder
+     */
+    public CatchDefinition exception(Class<? extends Throwable> exception) {
+        return exception(List.of(exception));
+    }
+
+    /**
+     * The exception(s) to catch.
+     *
+     * @param  exception1 fist exception
+     * @param  exception2 second exception
+     * @return            the builder
+     */
+    public CatchDefinition exception(Class<? extends Throwable> exception1, Class<? extends Throwable> exception2) {
+        return exception(List.of(exception1, exception2));
+    }
+
+    /**
+     * The exception(s) to catch.
+     *
+     * @param  exception1 fist exception
+     * @param  exception2 second exception
+     * @param  exception3 third exception
+     * @return            the builder
+     */
+    public CatchDefinition exception(
+            Class<? extends Throwable> exception1, Class<? extends Throwable> exception2,
+            Class<? extends Throwable> exception3) {
+        return exception(List.of(exception1, exception2, exception3));
+    }
 
     /**
      * The exception(s) to catch.
@@ -101,7 +159,8 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
      * @param  exceptions one or more exceptions
      * @return            the builder
      */
-    public CatchDefinition exception(Class<? extends Throwable>... exceptions) {
+    @SafeVarargs
+    public final CatchDefinition exception(Class<? extends Throwable>... exceptions) {
         return exception(List.of(exceptions));
     }
 
@@ -132,7 +191,7 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
      * @return           the builder
      */
     public CatchDefinition onWhen(@AsPredicate Predicate predicate) {
-        setOnWhen(new WhenDefinition(predicate));
+        setOnWhen(new OnWhenDefinition(predicate));
         return this;
     }
 
@@ -144,11 +203,11 @@ public class CatchDefinition extends OutputDefinition<CatchDefinition> {
         this.exceptions = exceptions;
     }
 
-    public WhenDefinition getOnWhen() {
+    public OnWhenDefinition getOnWhen() {
         return onWhen;
     }
 
-    public void setOnWhen(WhenDefinition onWhen) {
+    public void setOnWhen(OnWhenDefinition onWhen) {
         this.onWhen = onWhen;
     }
 

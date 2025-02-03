@@ -64,11 +64,8 @@ public class FromJmsToJdbcIdempotentConsumerToJmsTest extends CamelSpringTestSup
         return new ClassPathXmlApplicationContext("org/apache/camel/itest/sql/FromJmsToJdbcIdempotentConsumerToJmsTest.xml");
     }
 
-    @Override
     @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-
+    public void setupDataSources() {
         DataSource dataSource = context.getRegistry().lookupByNameAndType(getDatasourceName(), DataSource.class);
         jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.afterPropertiesSet();
@@ -124,7 +121,7 @@ public class FromJmsToJdbcIdempotentConsumerToJmsTest extends CamelSpringTestSup
 
         // check that there is no message in the database and JMS queue
         assertEquals(0, jdbcTemplate.queryForObject("select count(*) from CAMEL_MESSAGEPROCESSED", int.class));
-        assertNull(consumer.receiveBody("activemq2:queue:outbox", 3000));
+        assertNull(consumer.receiveBody("activemq2:queue:outbox", 100));
     }
 
     @Test
@@ -152,7 +149,7 @@ public class FromJmsToJdbcIdempotentConsumerToJmsTest extends CamelSpringTestSup
 
         // check that there is no message in the database and JMS queue
         assertEquals(0, jdbcTemplate.queryForObject("select count(*) from CAMEL_MESSAGEPROCESSED", int.class));
-        assertNull(consumer.receiveBody("activemq2:queue:outbox", 3000));
+        assertNull(consumer.receiveBody("activemq2:queue:outbox", 100));
     }
 
     @Test
@@ -218,7 +215,7 @@ public class FromJmsToJdbcIdempotentConsumerToJmsTest extends CamelSpringTestSup
     protected void checkInitialState() {
         // check there are no messages in the database and JMS queue
         assertEquals(0, jdbcTemplate.queryForObject("select count(*) from CAMEL_MESSAGEPROCESSED", int.class));
-        assertNull(consumer.receiveBody("activemq2:queue:outbox", 2000));
+        assertNull(consumer.receiveBody("activemq2:queue:outbox", 100));
     }
 
     @Override

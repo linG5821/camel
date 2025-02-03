@@ -50,12 +50,12 @@ public interface BacklogTracer {
     void setStandby(boolean standby);
 
     /**
-     * Number of messages to keep in the backlog. Default is 1000.
+     * Number of messages to keep in the backlog. Default is 100.
      */
     int getBacklogSize();
 
     /**
-     * Number of messages to keep in the backlog. Default is 1000.
+     * Number of messages to keep in the backlog (should be between 1 - 1000). Default is 100.
      */
     void setBacklogSize(int backlogSize);
 
@@ -110,6 +110,16 @@ public interface BacklogTracer {
     void setIncludeExchangeProperties(boolean includeExchangeProperties);
 
     /**
+     * Trace messages to include exchange variables
+     */
+    boolean isIncludeExchangeVariables();
+
+    /**
+     * Trace messages to include exchange variables
+     */
+    void setIncludeExchangeVariables(boolean includeExchangeVariables);
+
+    /**
      * Trace messages to include exception if the message failed
      */
     boolean isIncludeException();
@@ -120,7 +130,7 @@ public interface BacklogTracer {
     void setIncludeException(boolean includeException);
 
     /**
-     * Whether to trace routes that is created from Rest DSL.
+     * Whether to support tracing messages and outputting as JSon.
      */
     boolean isTraceRests();
 

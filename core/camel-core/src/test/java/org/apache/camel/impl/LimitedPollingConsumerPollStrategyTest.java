@@ -21,15 +21,18 @@ import org.apache.camel.Endpoint;
 import org.apache.camel.impl.engine.LimitedPollingConsumerPollStrategy;
 import org.apache.camel.support.service.ServiceHelper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(architectures = { "s390x" },
+              disabledReason = "This test does not run reliably on s390x (see CAMEL-21438)")
 public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
 
     private LimitedPollingConsumerPollStrategy strategy;
 
     @Test
-    public void testLimitedPollingConsumerPollStrategy() throws Exception {
+    public void testLimitedPollingConsumerPollStrategy() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();
@@ -52,7 +55,7 @@ public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
     }
 
     @Test
-    public void testLimitAtTwoLimitedPollingConsumerPollStrategy() throws Exception {
+    public void testLimitAtTwoLimitedPollingConsumerPollStrategy() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();
@@ -73,7 +76,7 @@ public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
     }
 
     @Test
-    public void testLimitedPollingConsumerPollStrategySuccess() throws Exception {
+    public void testLimitedPollingConsumerPollStrategySuccess() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();
@@ -101,7 +104,7 @@ public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
     }
 
     @Test
-    public void testLimitedPollingConsumerPollStrategySuccessThenFail() throws Exception {
+    public void testLimitedPollingConsumerPollStrategySuccessThenFail() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();
@@ -139,7 +142,7 @@ public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
     }
 
     @Test
-    public void testTwoConsumersLimitedPollingConsumerPollStrategy() throws Exception {
+    public void testTwoConsumersLimitedPollingConsumerPollStrategy() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();
@@ -173,7 +176,7 @@ public class LimitedPollingConsumerPollStrategyTest extends ContextTestSupport {
     }
 
     @Test
-    public void testRestartManuallyLimitedPollingConsumerPollStrategy() throws Exception {
+    public void testRestartManuallyLimitedPollingConsumerPollStrategy() {
         Exception expectedException = new Exception("Hello");
 
         strategy = new LimitedPollingConsumerPollStrategy();

@@ -27,8 +27,9 @@ import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
-@DisabledIfSystemProperty(named = "ci.env.name", matches = "apache.org", disabledReason = "Flaky on Apache CI")
-@Tags({ @Tag("couchbase-6") })
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Too resource intensive for most systems to run reliably")
+@Tags({ @Tag("couchbase-71") })
 public class ConsumeMessagesWithLimitIT extends CouchbaseIntegrationTestBase {
 
     @BeforeEach

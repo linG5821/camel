@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>components</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.10.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-spring-redis</artifactId>
@@ -71,6 +71,12 @@
 
         <!-- test infra -->
         <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-test-infra-redis</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+       </dependency>
+       <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-test-infra-redis</artifactId>
             <version>${project.version}</version>

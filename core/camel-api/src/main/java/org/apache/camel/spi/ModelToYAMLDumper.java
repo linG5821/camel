@@ -16,6 +16,9 @@
  */
 package org.apache.camel.spi;
 
+import java.util.List;
+import java.util.Map;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.NamedNode;
 
@@ -42,17 +45,37 @@ public interface ModelToYAMLDumper {
     /**
      * Dumps the definition as YAML
      *
-     * @param  context                  the CamelContext
-     * @param  definition               the definition, such as a {@link NamedNode}
-     * @param  resolvePlaceholders      whether to resolve property placeholders in the dumped YAML
-     * @param  resolveDelegateEndpoints whether to resolve delegate endpoints in the dumped YAML (limited to endpoints
-     *                                  used in uri attributes in the model)
-     * @return                          the output in YAML (is formatted)
-     * @throws Exception                is throw if error marshalling to YAML
+     * @param  context             the CamelContext
+     * @param  definition          the definition, such as a {@link NamedNode}
+     * @param  resolvePlaceholders whether to resolve property placeholders in the dumped YAML
+     * @param  uriAsParameters     whether to expand uri into a key/value parameters
+     * @param  generatedIds        whether to include auto generated IDs
+     * @return                     the output in YAML (is formatted)
+     * @throws Exception           is throw if error marshalling to YAML
      */
     String dumpModelAsYaml(
             CamelContext context, NamedNode definition,
-            boolean resolvePlaceholders, boolean resolveDelegateEndpoints)
+            boolean resolvePlaceholders, boolean uriAsParameters, boolean generatedIds)
             throws Exception;
+
+    /**
+     * Dumps the beans as YAML
+     *
+     * @param  context   the CamelContext
+     * @param  beans     list of beans (BeanFactoryDefinition)
+     * @return           the output in YAML (is formatted)
+     * @throws Exception is throw if error marshalling to YAML
+     */
+    String dumpBeansAsYaml(CamelContext context, List<Object> beans) throws Exception;
+
+    /**
+     * Dumps the global data formats as YAML
+     *
+     * @param  context     the CamelContext
+     * @param  dataFormats list of data formats (DataFormatDefinition)
+     * @return             the output in YAML (is formatted)
+     * @throws Exception   is throw if error marshalling to YAML
+     */
+    String dumpDataFormatsAsYaml(CamelContext context, Map<String, Object> dataFormats) throws Exception;
 
 }

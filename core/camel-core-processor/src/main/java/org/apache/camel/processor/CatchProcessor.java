@@ -31,6 +31,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.RollbackExchangeException;
 import org.apache.camel.Traceable;
 import org.apache.camel.spi.IdAware;
+import org.apache.camel.spi.InterceptableProcessor;
 import org.apache.camel.spi.RouteIdAware;
 import org.apache.camel.support.EventHelper;
 import org.apache.camel.support.ExchangeHelper;
@@ -42,7 +43,7 @@ import org.slf4j.LoggerFactory;
 /**
  * A processor which catches exceptions.
  */
-public class CatchProcessor extends DelegateAsyncProcessor implements Traceable, IdAware, RouteIdAware {
+public class CatchProcessor extends DelegateAsyncProcessor implements Traceable, IdAware, RouteIdAware, InterceptableProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(CatchProcessor.class);
 
@@ -111,6 +112,11 @@ public class CatchProcessor extends DelegateAsyncProcessor implements Traceable,
     }
 
     @Override
+    public boolean canIntercept() {
+        return false;
+    }
+
+    @Override
     public boolean process(final Exchange exchange, final AsyncCallback callback) {
         final Exception e = exchange.getException();
         Throwable caught = catches(exchange, e);
@@ -135,6 +141,11 @@ public class CatchProcessor extends DelegateAsyncProcessor implements Traceable,
         // store the last to endpoint as the failure endpoint
         if (exchange.getProperty(ExchangePropertyKey.FAILURE_ENDPOINT) == null) {
             exchange.setProperty(ExchangePropertyKey.FAILURE_ENDPOINT, exchange.getProperty(ExchangePropertyKey.TO_ENDPOINT));
+        }
+        // and store the route id so we know in which route we failed
+        String routeId = ExchangeHelper.getAtRouteId(exchange);
+        if (routeId != null) {
+            exchange.setProperty(ExchangePropertyKey.FAILURE_ROUTE_ID, routeId);
         }
         // give the rest of the pipeline another chance
         exchange.setProperty(ExchangePropertyKey.EXCEPTION_HANDLED, true);

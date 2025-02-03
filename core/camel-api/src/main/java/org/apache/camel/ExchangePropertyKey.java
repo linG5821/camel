@@ -51,7 +51,9 @@ public enum ExchangePropertyKey {
     FAILURE_HANDLED(Exchange.FAILURE_HANDLED),
     FAILURE_ROUTE_ID(Exchange.FAILURE_ROUTE_ID),
     FATAL_FALLBACK_ERROR_HANDLER(Exchange.FATAL_FALLBACK_ERROR_HANDLER),
+    FILE_EXCHANGE_FILE(Exchange.FILE_EXCHANGE_FILE),
     GROUPED_EXCHANGE(Exchange.GROUPED_EXCHANGE),
+    INTERCEPTED_ENDPOINT(Exchange.INTERCEPTED_ENDPOINT),
     INTERCEPT_SEND_TO_ENDPOINT_WHEN_MATCHED(Exchange.INTERCEPT_SEND_TO_ENDPOINT_WHEN_MATCHED),
     LOOP_INDEX(Exchange.LOOP_INDEX),
     LOOP_SIZE(Exchange.LOOP_SIZE),
@@ -72,7 +74,10 @@ public enum ExchangePropertyKey {
     STREAM_CACHE_UNIT_OF_WORK(Exchange.STREAM_CACHE_UNIT_OF_WORK),
     TO_ENDPOINT(Exchange.TO_ENDPOINT),
     TRY_ROUTE_BLOCK(Exchange.TRY_ROUTE_BLOCK),
-    UNIT_OF_WORK_EXHAUSTED(Exchange.UNIT_OF_WORK_EXHAUSTED);
+    UNIT_OF_WORK_EXHAUSTED(Exchange.UNIT_OF_WORK_EXHAUSTED),
+    // special for camel-tracing/open-telemetry
+    OTEL_ACTIVE_SPAN(Exchange.OTEL_ACTIVE_SPAN),
+    OTEL_CLOSE_CLIENT_SCOPE(Exchange.OTEL_CLOSE_CLIENT_SCOPE);
 
     private final String name;
 
@@ -84,7 +89,6 @@ public enum ExchangePropertyKey {
         return name;
     }
 
-    // CHECKSTYLE:OFF
     public static ExchangePropertyKey asExchangePropertyKey(String name) {
         switch (name) {
             case Exchange.AGGREGATED_COMPLETED_BY:
@@ -141,8 +145,12 @@ public enum ExchangePropertyKey {
                 return FAILURE_ROUTE_ID;
             case Exchange.FATAL_FALLBACK_ERROR_HANDLER:
                 return FATAL_FALLBACK_ERROR_HANDLER;
+            case Exchange.FILE_EXCHANGE_FILE:
+                return FILE_EXCHANGE_FILE;
             case Exchange.GROUPED_EXCHANGE:
                 return GROUPED_EXCHANGE;
+            case Exchange.INTERCEPTED_ENDPOINT:
+                return INTERCEPTED_ENDPOINT;
             case Exchange.INTERCEPT_SEND_TO_ENDPOINT_WHEN_MATCHED:
                 return INTERCEPT_SEND_TO_ENDPOINT_WHEN_MATCHED;
             case Exchange.LOOP_INDEX:
@@ -185,9 +193,12 @@ public enum ExchangePropertyKey {
                 return TRY_ROUTE_BLOCK;
             case Exchange.UNIT_OF_WORK_EXHAUSTED:
                 return UNIT_OF_WORK_EXHAUSTED;
+            case Exchange.OTEL_ACTIVE_SPAN:
+                return OTEL_ACTIVE_SPAN;
+            case Exchange.OTEL_CLOSE_CLIENT_SCOPE:
+                return OTEL_CLOSE_CLIENT_SCOPE;
             default:
                 return null;
         }
     }
-    // CHECKSTYLE:ON
 }

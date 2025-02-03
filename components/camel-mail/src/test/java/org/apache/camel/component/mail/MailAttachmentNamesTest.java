@@ -38,20 +38,19 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MailAttachmentNamesTest extends CamelTestSupport {
 
     public static final String UUID_EXPRESSION = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser james = Mailbox.getOrCreateUser("james", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser default_ = Mailbox.getOrCreateUser("default", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser suffix = Mailbox.getOrCreateUser("suffix", "secret");
 
     MockEndpoint resultEndpoint;
@@ -59,12 +58,12 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
     Session session;
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() {
         session = Mailbox.getSmtpSession();
+    }
 
-        super.setUp();
-
+    @Override
+    protected void doPostSetup() {
         Mailbox.clearAll();
         resultEndpoint = getMockEndpoint("mock:result");
         resultEndpoint.expectedMinimumMessageCount(1);
@@ -247,6 +246,18 @@ public class MailAttachmentNamesTest extends CamelTestSupport {
             Pattern guidPattern = Pattern.compile("^\\.fileName\\_" + UUID_EXPRESSION + "$");
             assertTrue(guidPattern.matcher(entry.getKey()).matches());
         }
+    }
+
+    @Test
+    public void testAttachmentWithNoDisposition() throws Exception {
+        sendTestMessage("disposition_none.txt", default_);
+
+        resultDefaultEndpoint.assertIsSatisfied();
+        Exchange exchange = resultDefaultEndpoint.getReceivedExchanges().get(0);
+        assertEquals(1, exchange.getIn(AttachmentMessage.class).getAttachmentObjects().entrySet().size());
+
+        Map<String, Attachment> attachments = exchange.getIn(AttachmentMessage.class).getAttachmentObjects();
+        assertNotNull(attachments.get("test.jpg"));
     }
 
     private void sendTestMessage(String filename, MailboxUser recipient) throws MessagingException, FileNotFoundException {

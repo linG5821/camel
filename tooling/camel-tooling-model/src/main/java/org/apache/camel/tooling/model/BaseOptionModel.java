@@ -48,6 +48,9 @@ public abstract class BaseOptionModel {
     protected String configurationField;
     protected String description;
     protected String nestedType;  // optional and currently only used by configurer
+    protected boolean supportFileReference;
+    protected boolean largeInput;
+    protected String inputLanguage;
 
     // todo: move this as a helper method
     protected boolean newGroup; // special for documentation rendering
@@ -274,6 +277,30 @@ public abstract class BaseOptionModel {
 
     public void setNestedType(String nestedType) {
         this.nestedType = nestedType;
+    }
+
+    public boolean isSupportFileReference() {
+        return supportFileReference;
+    }
+
+    public void setSupportFileReference(boolean supportFileReference) {
+        this.supportFileReference = supportFileReference;
+    }
+
+    public boolean isLargeInput() {
+        return largeInput;
+    }
+
+    public void setLargeInput(boolean largeInput) {
+        this.largeInput = largeInput;
+    }
+
+    public String getInputLanguage() {
+        return inputLanguage;
+    }
+
+    public void setInputLanguage(String inputLanguage) {
+        this.inputLanguage = inputLanguage;
     }
 
     public String getShortGroup() {

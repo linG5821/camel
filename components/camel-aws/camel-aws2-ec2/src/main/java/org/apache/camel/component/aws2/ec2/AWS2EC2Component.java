@@ -22,13 +22,14 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
 import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.annotations.Component;
-import org.apache.camel.support.DefaultComponent;
+import org.apache.camel.support.HealthCheckComponent;
 
 /**
  * For working with Amazon's Elastic Compute Cloud (EC2) SDK v2.
  */
 @Component("aws2-ec2")
-public class AWS2EC2Component extends DefaultComponent {
+public class AWS2EC2Component extends HealthCheckComponent {
+
     @Metadata
     private AWS2EC2Configuration configuration = new AWS2EC2Configuration();
 
@@ -50,10 +51,11 @@ public class AWS2EC2Component extends DefaultComponent {
         setProperties(endpoint, parameters);
         if (Boolean.FALSE.equals(configuration.isUseDefaultCredentialsProvider())
                 && Boolean.FALSE.equals(configuration.isUseProfileCredentialsProvider())
+                && Boolean.FALSE.equals(configuration.isUseSessionCredentials())
                 && configuration.getAmazonEc2Client() == null
                 && (configuration.getAccessKey() == null || configuration.getSecretKey() == null)) {
             throw new IllegalArgumentException(
-                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, amazonEC2Client or accessKey and secretKey must be specified");
+                    "useDefaultCredentialsProvider is set to false, useProfileCredentialsProvider is set to false, useSessionCredentials is set to false, amazonEC2Client or accessKey and secretKey must be specified");
         }
 
         return endpoint;

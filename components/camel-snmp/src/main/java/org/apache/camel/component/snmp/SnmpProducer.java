@@ -18,7 +18,6 @@ package org.apache.camel.component.snmp;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Vector;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.camel.Exchange;
@@ -66,7 +65,7 @@ public class SnmpProducer extends DefaultProducer {
     protected void doStart() throws Exception {
         super.doStart();
 
-        this.targetAddress = GenericAddress.parse(this.endpoint.getAddress());
+        this.targetAddress = GenericAddress.parse(this.endpoint.getServerAddress());
         LOG.debug("targetAddress: {}", targetAddress);
 
         this.usm = SnmpHelper.createAndSetUSM(endpoint);
@@ -98,7 +97,9 @@ public class SnmpProducer extends DefaultProducer {
         super.doStop();
 
         try {
-            SecurityModels.getInstance().removeSecurityModel(new Integer32(this.usm.getID()));
+            if (this.usm != null) {
+                SecurityModels.getInstance().removeSecurityModel(new Integer32(this.usm.getID()));
+            }
         } finally {
             this.targetAddress = null;
             this.usm = null;
@@ -114,7 +115,7 @@ public class SnmpProducer extends DefaultProducer {
         TransportMapping<? extends Address> transport = null;
 
         try {
-            LOG.debug("Starting SNMP producer on {}", this.endpoint.getAddress());
+            LOG.debug("Starting SNMP producer on {}", this.endpoint.getServerAddress());
 
             // either tcp or udp
             if ("tcp".equals(this.endpoint.getProtocol())) {
@@ -146,9 +147,9 @@ public class SnmpProducer extends DefaultProducer {
                         }
                         PDU response = responseEvent.getResponse();
                         String nextOid = null;
-                        Vector<? extends VariableBinding> variableBindings = response.getVariableBindings();
+                        List<? extends VariableBinding> variableBindings = response.getVariableBindings();
                         for (int i = 0; i < variableBindings.size(); i++) {
-                            VariableBinding variableBinding = variableBindings.elementAt(i);
+                            VariableBinding variableBinding = variableBindings.get(i);
                             nextOid = variableBinding.getOid().toDottedString();
                             if (!nextOid.startsWith(oid.toDottedString())) {
                                 matched = false;

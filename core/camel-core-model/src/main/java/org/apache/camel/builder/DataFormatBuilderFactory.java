@@ -20,6 +20,7 @@ import org.apache.camel.model.dataformat.ASN1DataFormat;
 import org.apache.camel.model.dataformat.AvroDataFormat;
 import org.apache.camel.model.dataformat.BarcodeDataFormat;
 import org.apache.camel.model.dataformat.Base64DataFormat;
+import org.apache.camel.model.dataformat.BeanioDataFormat;
 import org.apache.camel.model.dataformat.BindyDataFormat;
 import org.apache.camel.model.dataformat.CBORDataFormat;
 import org.apache.camel.model.dataformat.CryptoDataFormat;
@@ -28,6 +29,7 @@ import org.apache.camel.model.dataformat.CustomDataFormat;
 import org.apache.camel.model.dataformat.FhirJsonDataFormat;
 import org.apache.camel.model.dataformat.FhirXmlDataFormat;
 import org.apache.camel.model.dataformat.FlatpackDataFormat;
+import org.apache.camel.model.dataformat.FuryDataFormat;
 import org.apache.camel.model.dataformat.GrokDataFormat;
 import org.apache.camel.model.dataformat.GzipDeflaterDataFormat;
 import org.apache.camel.model.dataformat.HL7DataFormat;
@@ -42,6 +44,7 @@ import org.apache.camel.model.dataformat.PGPDataFormat;
 import org.apache.camel.model.dataformat.ParquetAvroDataFormat;
 import org.apache.camel.model.dataformat.ProtobufDataFormat;
 import org.apache.camel.model.dataformat.RssDataFormat;
+import org.apache.camel.model.dataformat.SmooksDataFormat;
 import org.apache.camel.model.dataformat.SoapDataFormat;
 import org.apache.camel.model.dataformat.SwiftMtDataFormat;
 import org.apache.camel.model.dataformat.SwiftMxDataFormat;
@@ -88,6 +91,13 @@ public final class DataFormatBuilderFactory {
      */
     public Base64DataFormat.Builder base64() {
         return new Base64DataFormat.Builder();
+    }
+
+    /**
+     * Uses the BeanIO data format
+     */
+    public BeanioDataFormat.Builder beanio() {
+        return new BeanioDataFormat.Builder();
     }
 
     /**
@@ -144,6 +154,13 @@ public final class DataFormatBuilderFactory {
      */
     public FlatpackDataFormat.Builder flatpack() {
         return new FlatpackDataFormat.Builder();
+    }
+
+    /**
+     * Uses the Fury data format
+     */
+    public FuryDataFormat.Builder fury() {
+        return new FuryDataFormat.Builder();
     }
 
     /**
@@ -242,6 +259,13 @@ public final class DataFormatBuilderFactory {
      */
     public RssDataFormat.Builder rss() {
         return new RssDataFormat.Builder();
+    }
+
+    /**
+     * Uses the Smooks data format
+     */
+    public SmooksDataFormat.Builder smooks() {
+        return new SmooksDataFormat.Builder();
     }
 
     /**

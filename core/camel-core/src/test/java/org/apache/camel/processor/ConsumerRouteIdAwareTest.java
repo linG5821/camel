@@ -31,16 +31,14 @@ import org.apache.camel.support.DefaultComponent;
 import org.apache.camel.support.DefaultConsumer;
 import org.apache.camel.support.DefaultEndpoint;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Isolated;
 
-@Isolated
 public class ConsumerRouteIdAwareTest extends ContextTestSupport {
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 context.addComponent("my", new MyComponent(context));
 
                 from("my:foo").routeId("foo").to("mock:result");
@@ -62,7 +60,7 @@ public class ConsumerRouteIdAwareTest extends ContextTestSupport {
         }
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             return new MyEndpoint(uri, this);
         }
     }
@@ -74,12 +72,12 @@ public class ConsumerRouteIdAwareTest extends ContextTestSupport {
         }
 
         @Override
-        public Producer createProducer() throws Exception {
+        public Producer createProducer() {
             throw new UnsupportedOperationException("Not supported");
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return new MyConsumer(this, processor);
         }
     }
@@ -88,21 +86,24 @@ public class ConsumerRouteIdAwareTest extends ContextTestSupport {
 
         public MyConsumer(Endpoint endpoint, Processor processor) {
             super(endpoint, processor);
+        }
+
+        @Override
+        protected void doStart() throws Exception {
+            super.doStart();
 
             Runnable run = () -> {
-                Exchange exchange = endpoint.createExchange();
+                Exchange exchange = getEndpoint().createExchange();
                 exchange.getMessage().setBody("Hello from consumer route " + getRouteId());
                 try {
-                    Thread.sleep(100);
-                    processor.process(exchange);
+                    getProcessor().process(exchange);
                 } catch (Exception e) {
-                    // ignore
+                    exchange.setException(e);
                 }
             };
             Thread t = new Thread(run);
             t.start();
         }
-
     }
 
 }

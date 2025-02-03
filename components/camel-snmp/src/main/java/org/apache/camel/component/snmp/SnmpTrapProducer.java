@@ -40,7 +40,7 @@ public class SnmpTrapProducer extends DefaultProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(SnmpTrapProducer.class);
 
-    private SnmpEndpoint endpoint;
+    private final SnmpEndpoint endpoint;
 
     private Address targetAddress;
     private USM usm;
@@ -55,7 +55,7 @@ public class SnmpTrapProducer extends DefaultProducer {
     protected void doStart() throws Exception {
         super.doStart();
 
-        this.targetAddress = GenericAddress.parse(this.endpoint.getAddress());
+        this.targetAddress = GenericAddress.parse(this.endpoint.getServerAddress());
         LOG.debug("targetAddress: {}", targetAddress);
 
         this.usm = SnmpHelper.createAndSetUSM(endpoint);
@@ -67,7 +67,9 @@ public class SnmpTrapProducer extends DefaultProducer {
         super.doStop();
 
         try {
-            SecurityModels.getInstance().removeSecurityModel(new Integer32(this.usm.getID()));
+            if (this.usm != null) {
+                SecurityModels.getInstance().removeSecurityModel(new Integer32(this.usm.getID()));
+            }
         } finally {
             this.targetAddress = null;
             this.usm = null;
@@ -82,7 +84,7 @@ public class SnmpTrapProducer extends DefaultProducer {
         TransportMapping<? extends Address> transport = null;
 
         try {
-            LOG.debug("Starting SNMP Trap producer on {}", this.endpoint.getAddress());
+            LOG.debug("Starting SNMP Trap producer on {}", this.endpoint.getServerAddress());
 
             // either tcp or udp
             if ("tcp".equals(this.endpoint.getProtocol())) {

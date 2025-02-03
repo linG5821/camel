@@ -35,7 +35,6 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.support.ObjectHelper;
 import org.apache.camel.test.junit5.CamelTestSupport;
 import org.apache.camel.util.CastUtils;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class MultipleDestinationConsumeTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser james = Mailbox.getOrCreateUser("james", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser bar = Mailbox.getOrCreateUser("bar", "secret");
     private Logger log = LoggerFactory.getLogger(getClass());
     private String body = "hello world!\r\n";
@@ -102,16 +99,13 @@ public class MultipleDestinationConsumeTest extends CamelTestSupport {
         while (iter.hasMoreElements()) {
             Header header = iter.nextElement();
             String[] value = message.getHeader(header.getName());
-            log.debug("Header: " + header.getName() + " has value: " + org.apache.camel.util.ObjectHelper.asString(value));
+            log.debug("Header: {} has value: {}", header.getName(), org.apache.camel.util.ObjectHelper.asString(value));
         }
     }
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         mailSession = Mailbox.getSmtpSession();
-
-        super.setUp();
     }
 
     @Override

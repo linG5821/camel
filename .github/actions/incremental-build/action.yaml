@@ -19,7 +19,7 @@ name: "Incremental Build Runner"
 description: "Build only affected projects"
 inputs:
   mode:
-    description: 'The mode to launch, it can be build, checkstyle or test'
+    description: 'The mode to launch, it can be build or test'
     required: true
   pr-id:
     description: 'Id of the pull request'
@@ -31,23 +31,29 @@ inputs:
     description: 'Flag indicating whether the installation of mvnd should be skipped'
     required: false
     default: 'false'
+  github-repo:
+    description: 'The GitHub repository name (example, apache/camel)'
+    required: false
+    default: 'apache/camel'
+  artifact-upload-suffix:
+    description: 'Suffix for artifacts stored'
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
     - id: install-mvnd
-      uses: ./.github/actions/install-mvnd
+      uses: apache/camel/.github/actions/install-mvnd@main
       with:
-        version: 1.0-m6
-        distribution: m39-linux-amd64
         dry-run: ${{ inputs.skip-mvnd-install }}
     - name: maven build
       shell: bash
-      run: ${{ github.action_path }}/incremental-build.sh ${{ steps.install-mvnd.outputs.mvnd-dir }}/mvnd ${{ inputs.mode }} ${{ inputs.pr-id }}
+      run: ${{ github.action_path }}/incremental-build.sh ${{ steps.install-mvnd.outputs.mvnd-dir }}/mvnd ${{ inputs.mode }} ${{ inputs.pr-id }} ${{ inputs.github-repo }}
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
     - name: archive logs
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
       if: always()
       with:
-        name: incremental-${{ inputs.mode }}.log
+        name: incremental-${{ inputs.mode }}-${{ inputs.artifact-upload-suffix }}.log
         path: incremental-${{ inputs.mode }}.log

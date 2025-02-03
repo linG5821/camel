@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>catalog</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.10.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-catalog</artifactId>
@@ -43,29 +43,25 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-core-catalog</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-util-json</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-tooling-model</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- disable all components -->
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-allcomponents</artifactId>
-            <version>${project.version}</version>
             <type>pom</type>
-            <scope>provided</scope>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.camel</groupId>
+                    <groupId>*</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -78,12 +74,11 @@
         <dependency>
             <groupId>org.apache.camel</groupId>
             <artifactId>camel-core-all</artifactId>
-            <version>${project.version}</version>
             <type>pom</type>
-            <scope>provided</scope>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.camel</groupId>
+                    <groupId>*</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -109,6 +104,12 @@
             <artifactId>camel-jsonpath</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- for testing groovy language -->
+        <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-groovy</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- for testing activemq component -->
         <dependency>
@@ -131,22 +132,13 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
-
-            <!-- sync parent/pom.xml with camel-dependencies/pom.xml -->
-            <plugin>
-                <groupId>org.apache.camel</groupId>
-                <artifactId>sync-properties-maven-plugin</artifactId>
-                <version>${project.version}</version>
-                <executions>
-                    <execution>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>sync-properties</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
 
             <!-- generate and include all components in the catalog -->
             <plugin>
@@ -161,6 +153,8 @@
                             <goal>update-sensitive-helper</goal>
                             <!-- update names in camel-main -->
                             <goal>update-main-helper</goal>
+                            <!-- update test-infra metadata -->
+                            <goal>update-test-infra-metadata</goal>
                         </goals>
                         <phase>generate-resources</phase>
                     </execution>
@@ -189,9 +183,15 @@
                     </execution>
                 </executions>
             </plugin>
-
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <delimiters>
+                        <delimiter>@</delimiter>
+                    </delimiters>
+                </configuration>
+            </plugin>
         </plugins>
-
     </build>
 
     <profiles>

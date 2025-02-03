@@ -40,7 +40,8 @@ public final class LazyStartProducer extends DefaultAsyncProducer implements Del
         try {
             // create and start producer lazy
             if (delegate == null) {
-                synchronized (lock) {
+                lock.lock();
+                try {
                     if (delegate == null) {
                         AsyncProducer newDelegate = AsyncProcessorConverterHelper.convert(getEndpoint().createProducer());
                         if (!ServiceHelper.isStarted(newDelegate)) {
@@ -48,9 +49,11 @@ public final class LazyStartProducer extends DefaultAsyncProducer implements Del
                         }
                         delegate = newDelegate;
                     }
+                } finally {
+                    lock.unlock();
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             // error creating or starting delegated failed, so allow to re-create on next call
             delegate = null;
             exchange.setException(e);
@@ -67,16 +70,6 @@ public final class LazyStartProducer extends DefaultAsyncProducer implements Del
         } else {
             return getEndpoint().isSingleton();
         }
-    }
-
-    @Override
-    protected void doBuild() {
-        // noop as we dont want to start the delegate but its started on the first message processed
-    }
-
-    @Override
-    protected void doInit() {
-        // noop as we dont want to start the delegate but its started on the first message processed
     }
 
     @Override

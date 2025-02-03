@@ -29,24 +29,20 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.camel.component.mail.SearchTermBuilder.Op;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MailSearchTermTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     protected static final MailboxUser bill = Mailbox.getOrCreateUser("bill", "secret");
 
     @BindToRegistry("myTerm")
     private SearchTerm term = createSearchTerm();
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         prepareMailbox();
-        super.setUp();
     }
 
     protected SearchTerm createSearchTerm() {
@@ -124,7 +120,7 @@ public class MailSearchTermTest extends CamelTestSupport {
     protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             public void configure() {
-                from(bill.uriPrefix(Protocol.imap) + "&debugMode=true&searchTerm=#myTerm&initialDelay=100&delay=100")
+                from(bill.uriPrefix(Protocol.imap) + "&debugMode=false&searchTerm=#myTerm&initialDelay=100&delay=100")
                         .to("mock:result");
             }
         };

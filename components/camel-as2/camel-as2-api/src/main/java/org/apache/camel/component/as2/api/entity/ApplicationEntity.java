@@ -16,31 +16,32 @@
  */
 package org.apache.camel.component.as2.api.entity;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 
+import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.component.as2.api.AS2Header;
 import org.apache.camel.component.as2.api.CanonicalOutputStream;
 import org.apache.camel.component.as2.api.util.EntityUtils;
 import org.apache.camel.util.ObjectHelper;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.Header;
-import org.apache.http.HeaderIterator;
-import org.apache.http.entity.ContentType;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
 import org.slf4j.helpers.MessageFormatter;
 
 public abstract class ApplicationEntity extends MimeEntity {
 
     protected static final String CONTENT_DISPOSITION_PATTERN = "attachment; filename={}";
 
-    private final String ediMessage;
+    protected final byte[] ediContent;
 
-    protected ApplicationEntity(String ediMessage, ContentType contentType, String contentTransferEncoding,
+    protected ApplicationEntity(byte[] ediContent, ContentType contentType, String contentTransferEncoding,
                                 boolean isMainBody, String filename) {
-        this.ediMessage = ObjectHelper.notNull(ediMessage, "EDI Message");
-        setContentType(ObjectHelper.notNull(contentType, "Content Type").toString());
-        setContentTransferEncoding(contentTransferEncoding);
+        super(contentType, contentTransferEncoding);
+        this.ediContent = ObjectHelper.notNull(ediContent, "EDI Content");
         setMainBody(isMainBody);
         if (StringUtils.isNotBlank(filename)) {
             addHeader(AS2Header.CONTENT_DISPOSITION,
@@ -48,8 +49,19 @@ public abstract class ApplicationEntity extends MimeEntity {
         }
     }
 
-    public String getEdiMessage() {
-        return ediMessage;
+    public Object getEdiMessage() {
+        if (this.getContentEncoding() != null) {
+            switch (this.getContentEncoding().toLowerCase()) {
+                case "base64":
+                case "binary":
+                    return new ByteArrayInputStream(ediContent);
+            }
+        }
+        try {
+            return new String(ediContent, getCharset());
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeCamelException(e);
+        }
     }
 
     @Override
@@ -60,15 +72,12 @@ public abstract class ApplicationEntity extends MimeEntity {
 
             // Write out mime part headers if this is not the main body of message.
             if (!isMainBody()) {
-                HeaderIterator it = headerIterator();
-                while (it.hasNext()) {
-                    Header header = it.nextHeader();
+                for (Header header : getAllHeaders()) {
                     canonicalOutstream.writeln(header.toString());
                 }
                 canonicalOutstream.writeln(); // ensure empty line between headers and body; RFC2046 - 5.1.1
             }
-
-            transferEncodedStream.write(ediMessage.getBytes(getCharset()), 0, ediMessage.length());
+            transferEncodedStream.write(ediContent);
         } catch (Exception e) {
             throw new IOException("Failed to write to output stream", e);
         }

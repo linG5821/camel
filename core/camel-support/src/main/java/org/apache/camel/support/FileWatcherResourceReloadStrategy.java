@@ -222,7 +222,7 @@ public class FileWatcherResourceReloadStrategy extends ResourceReloadStrategySup
 
     private void registerRecursive(final WatchService watcher, final Path root, final WatchEvent.Modifier modifier)
             throws IOException {
-        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                 WatchKey key = registerPathToWatcher(modifier, dir, watcher);
@@ -277,6 +277,8 @@ public class FileWatcherResourceReloadStrategy extends ResourceReloadStrategySup
                     // wait for a key to be available
                     key = watcher.poll(pollTimeout, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException ex) {
+                    LOG.info("Interrupted while polling for file changes");
+                    Thread.currentThread().interrupt();
                     break;
                 }
 
@@ -292,22 +294,28 @@ public class FileWatcherResourceReloadStrategy extends ResourceReloadStrategySup
                         WatchEvent<Path> we = (WatchEvent<Path>) event;
                         Path path = we.context();
                         File file = pathToReload.resolve(path).toFile();
+                        LOG.trace("File watch-event: {} on file: {}", we, file);
+                        if (file.isDirectory()) {
+                            continue;
+                        }
+
                         String name = FileUtil.compactPath(file.getPath());
                         LOG.debug("Detected Modified/Created file: {}", name);
                         boolean accept = fileFilter == null || fileFilter.accept(file);
                         if (accept) {
                             LOG.debug("Accepted Modified/Created file: {}", name);
                             try {
+                                setLastError(null);
                                 // must use file resource loader as we cannot load from classpath
                                 Resource resource
                                         = PluginHelper.getResourceLoader(getCamelContext()).resolveResource("file:" + name);
                                 getResourceReload().onReload(name, resource);
                                 incSucceededCounter();
                             } catch (Exception e) {
+                                setLastError(e);
                                 incFailedCounter();
-                                LOG.warn("Error reloading routes from file: " + name + " due " + e.getMessage()
-                                         + ". This exception is ignored.",
-                                        e);
+                                LOG.warn("Error reloading routes from file: {} due to: {}. This exception is ignored.", name,
+                                        e.getMessage(), e);
                             }
                         }
                     }

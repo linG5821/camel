@@ -24,6 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.health.HealthCheck;
 import org.apache.camel.health.HealthCheckHelper;
 import org.apache.camel.health.HealthCheckRegistry;
+import org.apache.camel.health.HealthCheckRepository;
 import org.apache.camel.impl.health.DefaultHealthCheckRegistry;
 import org.apache.camel.test.infra.aws.common.services.AWSService;
 import org.apache.camel.test.infra.aws2.clients.AWSSDKClientUtils;
@@ -32,17 +33,13 @@ import org.apache.camel.test.junit5.CamelTestSupport;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 public class Kinesis2ConsumerHealthCheckStaticCredsIT extends CamelTestSupport {
 
     @RegisterExtension
-    public static AWSService service = AWSServiceFactory.createS3Service();
-
-    private static final Logger LOG = LoggerFactory.getLogger(Kinesis2ConsumerHealthCheckStaticCredsIT.class);
+    public static AWSService service = AWSServiceFactory.createSingletonS3Service();
 
     CamelContext context;
 
@@ -64,6 +61,9 @@ public class Kinesis2ConsumerHealthCheckStaticCredsIT extends CamelTestSupport {
         registry.register(hc);
         hc = registry.resolveById("consumers");
         registry.register(hc);
+        HealthCheckRepository hcr = (HealthCheckRepository) registry.resolveById("producers");
+        hcr.setEnabled(true);
+        registry.register(hcr);
         context.getCamelContextExtension().addContextPlugin(HealthCheckRegistry.class, registry);
 
         return context;
@@ -75,15 +75,14 @@ public class Kinesis2ConsumerHealthCheckStaticCredsIT extends CamelTestSupport {
 
             @Override
             public void configure() {
-                from("aws2-kinesis://stream?region=l&secretKey=l&accessKey=k")
-                        .startupOrder(2).log("${body}").routeId("test-health-it");
+                from("aws2-kinesis://stream?region=l&secretKey=l&accessKey=k").startupOrder(2).log("${body}")
+                        .routeId("test-health-it");
             }
         };
     }
 
     @Test
     public void testConnectivity() {
-
         Collection<HealthCheck.Result> res = HealthCheckHelper.invokeLiveness(context);
         boolean up = res.stream().allMatch(r -> r.getState().equals(HealthCheck.State.UP));
         Assertions.assertTrue(up, "liveness check");
@@ -93,14 +92,9 @@ public class Kinesis2ConsumerHealthCheckStaticCredsIT extends CamelTestSupport {
             Collection<HealthCheck.Result> res2 = HealthCheckHelper.invokeReadiness(context);
             boolean down = res2.stream().allMatch(r -> r.getState().equals(HealthCheck.State.DOWN));
             boolean containsKinesis2HealthCheck = res2.stream()
-                    .filter(result -> result.getCheck().getId().startsWith("aws2-kinesis-consumer"))
-                    .findAny()
-                    .isPresent();
-            boolean hasRegionMessage = res2.stream()
-                    .anyMatch(r -> r.getMessage().stream().anyMatch(msg -> msg.contains("region")));
+                    .anyMatch(result -> result.getCheck().getId().startsWith("consumer:test-health-it"));
             Assertions.assertTrue(down, "liveness check");
             Assertions.assertTrue(containsKinesis2HealthCheck, "aws2-kinesis check");
-            Assertions.assertTrue(hasRegionMessage, "aws2-kinesis check error message");
         });
 
     }

@@ -49,7 +49,6 @@ public class LoopProcessor extends DelegateAsyncProcessor implements Traceable, 
     private String id;
     private String routeId;
     private boolean shutdownPending;
-    private final CamelContext camelContext;
     private final ReactiveExecutor reactiveExecutor;
     private final Expression expression;
     private final Predicate predicate;
@@ -60,7 +59,6 @@ public class LoopProcessor extends DelegateAsyncProcessor implements Traceable, 
     public LoopProcessor(CamelContext camelContext, Processor processor, Expression expression, Predicate predicate,
                          boolean copy, boolean breakOnShutdown) {
         super(processor);
-        this.camelContext = camelContext;
         this.reactiveExecutor = camelContext.getCamelContextExtension().getReactiveExecutor();
         this.expression = expression;
         this.predicate = predicate;
@@ -162,15 +160,33 @@ public class LoopProcessor extends DelegateAsyncProcessor implements Traceable, 
                     if (LOG.isTraceEnabled()) {
                         LOG.trace("Processing complete for exchangeId: {} >>> {}", exchange.getExchangeId(), exchange);
                     }
+                    if (!cont && expression != null) {
+                        // if we should stop due to an exception etc, then make sure to dec task count
+                        int gap = count - index;
+                        while (gap-- > 0) {
+                            taskCount.decrement();
+                        }
+                    }
                     callback.done(false);
                 }
             } catch (Exception e) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("Processing failed for exchangeId: {} >>> {}", exchange.getExchangeId(), e.getMessage());
-                }
-                exchange.setException(e);
+                handleException(e);
                 callback.done(false);
             }
+        }
+
+        private void handleException(Exception e) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("Processing failed for exchangeId: {} >>> {}", exchange.getExchangeId(), e.getMessage());
+            }
+            if (expression != null) {
+                // if we should stop due to an exception etc, then make sure to dec task count
+                int gap = count - index;
+                while (gap-- > 0) {
+                    taskCount.decrement();
+                }
+            }
+            exchange.setException(e);
         }
 
         @Override

@@ -15,40 +15,56 @@
 # limitations under the License.
 #
 
-# Modify maven options here if needed
-MVN_DEFAULT_OPTS="-Dmaven.compiler.fork=true -Dsurefire.rerunFailingTestsCount=2 -Dfailsafe.rerunFailingTestsCount=2 -Dci.env.name=github.com -Dmvnd.threads=2 -V -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 --no-transfer-progress -e"
-MVN_OPTS=${MVN_OPTS:-$MVN_DEFAULT_OPTS}
+echo "Using MVND_OPTS=$MVND_OPTS"
 
 function main() {
-  local mavenBinary=${1}
-  local commentBody=${2}
-  local fastBuild=${3}
-  local log=${4}
+  local mavenBinary=$MAVEN_BINARY
+  local commentBody=$COMMENT_BODY
+  local fastBuild=$FAST_BUILD
+  local log=$LOG_FILE
 
   if [[ ${commentBody} = /component-test* ]] ; then
     local componentList="${commentBody:16}"
     echo "The list of components to test is ${componentList}"
   else
-    echo "No components has been detected, the expected format is '/component-test (camel-)component-name1 (camel-)component-name2...'"
+    echo "No components have been detected, the expected format is '/component-test (camel-)component-name1 (camel-)component-name2...'"
     exit 1
   fi
   local pl=""
   for component in ${componentList}
   do
     if [[ ${component} = camel-* ]] ; then
-      pl="$pl,components/${component}"
+      componentPath="components/${component}"
     else
-      pl="$pl,components/camel-${component}"
+      componentPath="components/camel-${component}"
+    fi
+    if [[ -d "${componentPath}" ]] ; then
+      pl="$pl$(find "${componentPath}" -name pom.xml -not -path "*/src/it/*" -not -path "*/target/*" -exec dirname {} \; | sort | tr -s "\n" ",")"
     fi
   done
-  pl="${pl:1}"
+  len=${#pl}
+  if [[ "$len" -gt "0" ]] ; then
+    pl="${pl::len-1}"
+  else
+    echo "The components to test don't exist"
+    exit 1
+  fi
 
   if [[ ${fastBuild} = "true" ]] ; then
     echo "Launching a fast build against the projects ${pl} and their dependencies"
-    $mavenBinary -l $log $MVN_OPTS -Pfastinstall install -pl "$pl" -am
+    $mavenBinary -l $log $MVND_OPTS -Dquickly install -pl "$pl" -am
   else
     echo "Launching tests of the projects ${pl}"
-    $mavenBinary -l $log $MVN_OPTS install -pl "$pl"
+    $mavenBinary -l $log $MVND_OPTS install -pl "$pl"
+    ret=$?
+
+    if [[ ${ret} -ne 0 ]] ; then
+      echo "Processing surefire and failsafe reports to create the summary"
+      echo -e "| Failed Test | Duration | Failure Type |\n| --- | --- | --- |"  > "$GITHUB_STEP_SUMMARY"
+      find . -path '*target/*-reports*' -iname '*.txt' -exec .github/actions/incremental-build/parse_errors.sh {} \;
+    fi
+
+    exit $ret
   fi
 }
 

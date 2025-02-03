@@ -35,6 +35,16 @@ public interface RoutesLoader extends CamelContextAware {
     String FACTORY = "routes-loader";
 
     /**
+     * Whether to ignore route loading and compilation errors (use this with care!)
+     */
+    boolean isIgnoreLoadingError();
+
+    /**
+     * Whether to ignore route loading and compilation errors (use this with care!)
+     */
+    void setIgnoreLoadingError(boolean ignoreLoadingError);
+
+    /**
      * Looks up a {@link RoutesBuilderLoader} in the registry or fallback to a factory finder mechanism if none found.
      *
      * @param  extension                the file extension for which a loader should be found.
@@ -53,8 +63,8 @@ public interface RoutesLoader extends CamelContextAware {
         Collection<RoutesBuilder> builders = findRoutesBuilders(resources);
         // add configuration first before the routes
         for (RoutesBuilder builder : builders) {
-            if (builder instanceof RouteConfigurationsBuilder) {
-                getCamelContext().addRoutesConfigurations((RouteConfigurationsBuilder) builder);
+            if (builder instanceof RouteConfigurationsBuilder rcb) {
+                getCamelContext().addRoutesConfigurations(rcb);
             }
         }
         for (RoutesBuilder builder : builders) {
@@ -75,8 +85,8 @@ public interface RoutesLoader extends CamelContextAware {
         Collection<RoutesBuilder> builders = findRoutesBuilders(resources);
         // add configuration first before the routes
         for (RoutesBuilder builder : builders) {
-            if (builder instanceof RouteConfigurationsBuilder) {
-                getCamelContext().addRoutesConfigurations((RouteConfigurationsBuilder) builder);
+            if (builder instanceof RouteConfigurationsBuilder rcb) {
+                getCamelContext().addRoutesConfigurations(rcb);
             }
         }
         for (RoutesBuilder builder : builders) {

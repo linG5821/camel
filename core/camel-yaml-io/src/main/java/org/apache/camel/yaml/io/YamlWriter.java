@@ -18,22 +18,26 @@ package org.apache.camel.yaml.io;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.net.URISyntaxException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Stack;
 import java.util.StringJoiner;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import org.apache.camel.CamelContext;
+import org.apache.camel.CamelContextAware;
 import org.apache.camel.catalog.impl.DefaultRuntimeCamelCatalog;
-import org.apache.camel.catalog.impl.URISupport;
+import org.apache.camel.support.service.ServiceSupport;
 import org.apache.camel.tooling.model.BaseOptionModel;
 import org.apache.camel.tooling.model.EipModel;
+import org.apache.camel.util.StringHelper;
+import org.apache.camel.util.URISupport;
 import org.apache.camel.util.json.JsonArray;
 import org.apache.camel.util.json.JsonObject;
 
@@ -50,32 +54,67 @@ import org.apache.camel.util.json.JsonObject;
  * After this we transform from {@link EipModel} to {@link EipNode} to have a List/Map structure that we then transform
  * to JSon, and then from JSon to YAML.
  */
-public class YamlWriter {
+public class YamlWriter extends ServiceSupport implements CamelContextAware {
 
+    private CamelContext camelContext;
     private final Writer writer;
     private final DefaultRuntimeCamelCatalog catalog;
+    private final ModelJSonSchemaResolver resolver;
     private final List<EipModel> roots = new ArrayList<>();
     private boolean routesIsRoot;
-    private final Stack<EipModel> models = new Stack<>();
+    private final ArrayDeque<EipModel> models = new ArrayDeque<>();
     private String expression;
+    private boolean uriAsParameters;
 
     public YamlWriter(Writer writer) {
         this.writer = writer;
+        this.resolver = new ModelJSonSchemaResolver();
         this.catalog = new DefaultRuntimeCamelCatalog();
+        this.catalog.setJSonSchemaResolver(this.resolver);
         this.catalog.setCaching(false); // turn cache off as we store state per node
-        this.catalog.setJSonSchemaResolver(new ModelJSonSchemaResolver());
         this.catalog.start();
     }
 
+    @Override
+    public CamelContext getCamelContext() {
+        return camelContext;
+    }
+
+    @Override
+    public void setCamelContext(CamelContext camelContext) {
+        this.camelContext = camelContext;
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        if (camelContext != null) {
+            this.resolver.setCamelContext(camelContext);
+            this.resolver.setClassLoader(camelContext.getApplicationContextClassLoader());
+        }
+    }
+
+    private EipModel lookupEipModel(String name) {
+        // namespace is using the property model
+        if ("namespace".equals(name)) {
+            name = "property";
+        }
+        return catalog.eipModel(name);
+    }
+
+    public void setUriAsParameters(boolean uriAsParameters) {
+        this.uriAsParameters = uriAsParameters;
+    }
+
     public void startElement(String name) throws IOException {
-        if ("routes".equals(name)) {
+        if ("routes".equals(name) || "dataFormats".equals(name)) {
+            // special for routes or dataFormats
             routesIsRoot = true;
             return;
         }
 
-        EipModel model = catalog.eipModel(name);
+        EipModel model = lookupEipModel(name);
         if (model == null) {
-            // not an EIP model
+            // not an EIP model or namespace
             return;
         }
 
@@ -99,15 +138,38 @@ public class YamlWriter {
     }
 
     public void endElement(String name) throws IOException {
-        if ("routes".equals(name)) {
+        if ("routes".equals(name) || "dataFormats".equals(name)) {
             // we are done
             writer.write(toYaml());
             return;
         }
 
-        EipModel model = catalog.eipModel(name);
+        EipModel model = lookupEipModel(name);
         if (model == null) {
             // not an EIP model
+            return;
+        }
+
+        // special for namespace
+        if ("namespace".equals(name)) {
+            EipModel last = models.isEmpty() ? null : models.peek();
+            if (!models.isEmpty()) {
+                models.pop();
+            }
+            EipModel parent = models.isEmpty() ? null : models.peek();
+            if (parent != null) {
+                Map<String, String> map = (Map<String, String>) parent.getMetadata().get("namespace");
+                if (map == null) {
+                    map = new LinkedHashMap<>();
+                    parent.getMetadata().put("namespace", map);
+                }
+                String key = (String) last.getMetadata().get("key");
+                String value = (String) last.getMetadata().get("value");
+                // skip xsi namespace
+                if (key != null && !"xsi".equals(key) && value != null) {
+                    map.put(key, value);
+                }
+            }
             return;
         }
 
@@ -137,6 +199,14 @@ public class YamlWriter {
                 if ("from".equals(name) && parent.isInput()) {
                     // only set input once
                     parent.getMetadata().put("_input", last);
+                } else if ("dataFormats".equals(parent.getName())) {
+                    // special for dataFormats
+                    List<EipModel> list = (List<EipModel>) parent.getMetadata().get("_output");
+                    if (list == null) {
+                        list = new ArrayList<>();
+                        parent.getMetadata().put("_output", list);
+                    }
+                    list.add(last);
                 } else if ("choice".equals(parent.getName())) {
                     // special for choice/doCatch/doFinally
                     setMetadata(parent, name, last);
@@ -181,13 +251,28 @@ public class YamlWriter {
         EipModel last = models.isEmpty() ? null : models.peek();
         if (last != null) {
             // uri should be expanded into more human-readable with parameters
-            if ("uri".equals(name) && value != null) {
+            if (uriAsParameters && "uri".equals(name) && value != null) {
+                try {
+                    String base = StringHelper.before(value.toString(), ":");
+                    if (base != null) {
+                        Map parameters = catalog.endpointProperties(value.toString());
+                        if (!parameters.isEmpty()) {
+                            prepareParameters(parameters);
+                            last.getMetadata().put("uri", base);
+                            last.getMetadata().put("parameters", parameters);
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    // ignore will attempt without catalog
+                }
                 try {
                     String base = URISupport.stripQuery(value.toString());
                     String query = URISupport.extractQuery(value.toString());
                     if (base != null && query != null) {
-                        Map<String, Object> parameters = parseQuery(query);
+                        Map parameters = URISupport.parseQuery(query);
                         if (!parameters.isEmpty()) {
+                            prepareParameters(parameters);
                             last.getMetadata().put("uri", base);
                             last.getMetadata().put("parameters", parameters);
                             return;
@@ -202,15 +287,14 @@ public class YamlWriter {
         }
     }
 
-    private static Map<String, Object> parseQuery(String query) throws URISyntaxException {
-        Map<String, Object> parameters = URISupport.parseQuery(query);
+    private static void prepareParameters(Map<String, Object> parameters) {
         // convert "true" / "false" to boolean values
         parameters.forEach((k, v) -> {
             if ("true".equals(v) || "false".equals(v)) {
-                parameters.replace(k, Boolean.valueOf(v.toString()));
+                Object s = Boolean.valueOf(v.toString());
+                parameters.replace(k, s);
             }
         });
-        return parameters;
     }
 
     private EipNode asExpressionNode(EipModel model, String name) {
@@ -265,16 +349,15 @@ public class YamlWriter {
                     exp = expressionName(model, key);
                 }
                 Object v = entry.getValue();
-                if (v instanceof EipModel) {
-                    EipModel m = (EipModel) entry.getValue();
+                if (v instanceof EipModel m) {
                     if (exp == null || "expression".equals(exp)) {
                         v = asExpressionNode(m, m.getName());
                     } else {
                         v = asExpressionNode(m, exp);
                     }
                 }
-                if (exp != null && v instanceof EipNode) {
-                    node.addExpression((EipNode) v);
+                if (exp != null && v instanceof EipNode eipNode) {
+                    node.addExpression(eipNode);
                 } else {
                     node.addProperty(key, v);
                     if ("expression".equals(key)) {
@@ -322,7 +405,6 @@ public class YamlWriter {
         return arr;
     }
 
-    @SuppressWarnings("unchecked")
     private JsonObject asJSonNode(EipModel model) {
         JsonObject answer = new JsonObject();
         JsonObject jo = new JsonObject();
@@ -338,11 +420,11 @@ public class YamlWriter {
             if (value != null) {
                 if (value instanceof Collection<?>) {
                     Collection<?> col = (Collection<?>) value;
-                    List list = new ArrayList<>();
+                    List<Object> list = new ArrayList<>();
                     for (Object v : col) {
                         Object r = v;
-                        if (r instanceof EipModel) {
-                            EipNode en = asNode((EipModel) r);
+                        if (r instanceof EipModel eipModel) {
+                            EipNode en = asNode(eipModel);
                             value = en.asJsonObject();
                             JsonObject wrap = new JsonObject();
                             wrap.put(en.getName(), value);
@@ -359,8 +441,8 @@ public class YamlWriter {
                     }
                     jo.put(key, list);
                 } else {
-                    if (value instanceof EipModel) {
-                        EipNode r = asNode((EipModel) value);
+                    if (value instanceof EipModel eipModel) {
+                        EipNode r = asNode(eipModel);
                         value = r.asJsonObject();
                         jo.put(r.getName(), value);
                     } else {
@@ -378,7 +460,7 @@ public class YamlWriter {
         // special for choice
         boolean array = isArray(model, name);
         if (array) {
-            List list = (List) model.getMetadata().get(name);
+            List<Object> list = (List<Object>) model.getMetadata().get(name);
             if (list == null) {
                 list = new ArrayList<>();
                 model.getMetadata().put(name, list);

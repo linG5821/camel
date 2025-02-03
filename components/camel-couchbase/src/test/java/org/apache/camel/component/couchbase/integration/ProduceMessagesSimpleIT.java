@@ -22,7 +22,10 @@ import org.apache.camel.component.mock.MockEndpoint;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Tags;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Too resource intensive for most systems to run reliably")
 @Tags({ @Tag("couchbase-7") })
 public class ProduceMessagesSimpleIT extends CouchbaseIntegrationTestBase {
 

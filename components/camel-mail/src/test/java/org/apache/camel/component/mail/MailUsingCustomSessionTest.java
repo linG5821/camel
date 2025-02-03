@@ -30,23 +30,19 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class MailUsingCustomSessionTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser james = Mailbox.getOrCreateUser("james", "secret");
 
     @BindToRegistry("myCustomMailSession")
     private Session mailSession = Session.getInstance(new Properties());
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
+    public void doPostSetup() {
         Mailbox.clearAll();
     }
 

@@ -25,6 +25,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,7 +59,7 @@ import org.slf4j.LoggerFactory;
 public final class JacksonTypeConverters {
     private static final Logger LOG = LoggerFactory.getLogger(JacksonTypeConverters.class);
 
-    private final Object lock;
+    private final Lock lock;
     private volatile ObjectMapper defaultMapper;
 
     private boolean init;
@@ -66,7 +68,7 @@ public final class JacksonTypeConverters {
     private String moduleClassNames;
 
     public JacksonTypeConverters() {
-        this.lock = new Object();
+        this.lock = new ReentrantLock();
     }
 
     @Converter
@@ -136,7 +138,7 @@ public final class JacksonTypeConverters {
     @Converter
     public Map<String, Object> toMap(JsonNode node, Exchange exchange) throws Exception {
         ObjectMapper mapper = resolveObjectMapper(exchange.getContext());
-        return mapper.convertValue(node, new TypeReference<Map<String, Object>>() {
+        return mapper.convertValue(node, new TypeReference<>() {
         });
     }
 
@@ -168,6 +170,11 @@ public final class JacksonTypeConverters {
         }
         String text = node.asText();
         return Long.valueOf(text);
+    }
+
+    @Converter
+    public Boolean toBoolean(BooleanNode node, Exchange exchange) throws Exception {
+        return node.asBoolean();
     }
 
     @Converter
@@ -209,24 +216,7 @@ public final class JacksonTypeConverters {
 
         // only do this if enabled (disabled by default)
         if (!init && exchange != null) {
-            Map<String, String> globalOptions = exchange.getContext().getGlobalOptions();
-
-            // init to see if this is enabled
-            String text = globalOptions.get(JacksonConstants.ENABLE_TYPE_CONVERTER);
-            if (text != null) {
-                text = exchange.getContext().resolvePropertyPlaceholders(text);
-                enabled = "true".equalsIgnoreCase(text);
-            }
-
-            // pojoOnly is disabled by default
-            text = globalOptions.get(JacksonConstants.TYPE_CONVERTER_TO_POJO);
-            if (text != null) {
-                text = exchange.getContext().resolvePropertyPlaceholders(text);
-                toPojo = "true".equalsIgnoreCase(text);
-            }
-
-            moduleClassNames = globalOptions.get(JacksonConstants.TYPE_CONVERTER_MODULE_CLASS_NAMES);
-            init = true;
+            initialize(exchange);
         }
 
         if (!enabled) {
@@ -278,6 +268,27 @@ public final class JacksonTypeConverters {
         return null;
     }
 
+    private void initialize(Exchange exchange) {
+        Map<String, String> globalOptions = exchange.getContext().getGlobalOptions();
+
+        // init to see if this is enabled
+        String text = globalOptions.get(JacksonConstants.ENABLE_TYPE_CONVERTER);
+        if (text != null) {
+            text = exchange.getContext().resolvePropertyPlaceholders(text);
+            enabled = Boolean.parseBoolean(text);
+        }
+
+        // pojoOnly is disabled by default
+        text = globalOptions.get(JacksonConstants.TYPE_CONVERTER_TO_POJO);
+        if (text != null) {
+            text = exchange.getContext().resolvePropertyPlaceholders(text);
+            toPojo = Boolean.parseBoolean(text);
+        }
+
+        moduleClassNames = globalOptions.get(JacksonConstants.TYPE_CONVERTER_MODULE_CLASS_NAMES);
+        init = true;
+    }
+
     /**
      * Whether the type is NOT a pojo type but only a set of simple types such as String and numbers.
      */
@@ -297,7 +308,8 @@ public final class JacksonTypeConverters {
         }
 
         if (defaultMapper == null) {
-            synchronized (lock) {
+            lock.lock();
+            try {
                 if (defaultMapper == null) {
                     ObjectMapper mapper = new ObjectMapper();
                     if (moduleClassNames != null) {
@@ -313,6 +325,8 @@ public final class JacksonTypeConverters {
 
                     defaultMapper = mapper;
                 }
+            } finally {
+                lock.unlock();
             }
         }
 

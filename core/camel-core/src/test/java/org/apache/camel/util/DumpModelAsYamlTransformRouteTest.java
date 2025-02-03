@@ -16,7 +16,7 @@
  */
 package org.apache.camel.util;
 
-import java.io.FileInputStream;
+import java.nio.file.Paths;
 
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.support.PluginHelper;
@@ -33,16 +33,30 @@ public class DumpModelAsYamlTransformRouteTest extends DumpModelAsYamlTestSuppor
         assertNotNull(out);
         log.info(out);
 
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/org/apache/camel/util/transform.yaml"));
+        String expected
+                = IOHelper.stripLineComments(Paths.get("src/test/resources/org/apache/camel/util/transform.yaml"), "#", true);
+        Assertions.assertEquals(expected, out);
+    }
+
+    @Test
+    public void testDumpModelAsYamlUriAsParameters() throws Exception {
+        String out = PluginHelper.getModelToYAMLDumper(context).dumpModelAsYaml(context, context.getRouteDefinition("myRoute"),
+                true, true, true);
+        assertNotNull(out);
+        log.info(out);
+
+        String expected
+                = IOHelper.stripLineComments(Paths.get("src/test/resources/org/apache/camel/util/transform2.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
-                from("direct:start").routeId("myRoute").transform().simple("Hello ${body}").to("mock:result").id("myMock");
+            public void configure() {
+                from("direct:start?exchangePattern=InOnly").routeId("myRoute").transform().simple("Hello ${body}")
+                        .to("mock:result?failFast=false&retainFirst=5&browseLimit=123").id("myMock");
             }
         };
     }

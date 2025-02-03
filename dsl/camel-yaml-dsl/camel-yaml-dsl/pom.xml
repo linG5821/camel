@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.camel</groupId>
         <artifactId>camel-yaml-dsl-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.10.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>camel-yaml-dsl</artifactId>
@@ -42,6 +42,10 @@
         <sourcecheckExcludesComma>
             ${sourcecheckExcludes},
         </sourcecheckExcludesComma>
+        <annotations>
+            routes.language=yaml
+        </annotations>
+
         <camel-generate-yaml-writer>true</camel-generate-yaml-writer>
     </properties>
 
@@ -67,7 +71,6 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -159,11 +162,6 @@
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
-            <artifactId>camel-groovy-dsl</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.camel</groupId>
             <artifactId>camel-joor</artifactId>
             <scope>test</scope>
         </dependency>
@@ -189,7 +187,17 @@
         </dependency>
         <dependency>
             <groupId>org.apache.camel</groupId>
+            <artifactId>camel-jacksonxml</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.camel</groupId>
             <artifactId>camel-sql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.camel</groupId>
+            <artifactId>camel-platform-http</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -207,9 +215,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.java-json-tools</groupId>
+            <groupId>com.networknt</groupId>
             <artifactId>json-schema-validator</artifactId>
-            <version>${json-schema-validator-version}</version>
+            <version>${networknt-json-schema-validator-version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -231,7 +239,7 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.5.1</version>
+            <version>42.7.5</version>
             <scope>test</scope>
         </dependency>
 
@@ -258,7 +266,6 @@
             <plugin>
                 <groupId>org.apache.camel</groupId>
                 <artifactId>camel-yaml-dsl-maven-plugin</artifactId>
-                <version>${project.version}</version>
                 <executions>
                     <!-- camelCase -->
                     <execution>
@@ -268,20 +275,8 @@
                             <goal>generate-yaml-schema</goal>
                         </goals>
                         <configuration>
-                            <kebabCase>false</kebabCase>
+                            <additionalProperties>false</additionalProperties>
                             <outputFile>src/generated/resources/schema/camelYamlDsl.json</outputFile>
-                        </configuration>
-                    </execution>
-                    <!-- kebab-case -->
-                    <execution>
-                        <id>generate-yaml-schema-kebab-case</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>generate-yaml-schema</goal>
-                        </goals>
-                        <configuration>
-                            <kebabCase>true</kebabCase>
-                            <outputFile>src/generated/resources/schema/camel-yaml-dsl.json</outputFile>
                         </configuration>
                     </execution>
                 </executions>

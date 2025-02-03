@@ -20,8 +20,10 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.activation.DataHandler;
@@ -32,7 +34,10 @@ import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.http.Cookie;
+import io.vertx.core.http.impl.ServerCookie;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.auth.authentication.AuthenticationProvider;
 import io.vertx.ext.auth.properties.PropertyFileAuthentication;
@@ -44,8 +49,11 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.platform.http.HttpEndpointModel;
 import org.apache.camel.component.platform.http.PlatformHttpComponent;
 import org.apache.camel.component.platform.http.spi.Method;
+import org.apache.camel.component.platform.http.spi.PlatformHttpEngine;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.model.rest.RestBindingMode;
 import org.apache.camel.model.rest.RestParamType;
+import org.apache.camel.spi.EmbeddedHttpService;
 import org.apache.camel.spi.RestConfiguration;
 import org.apache.camel.support.jsse.KeyManagersParameters;
 import org.apache.camel.support.jsse.KeyStoreParameters;
@@ -53,17 +61,22 @@ import org.apache.camel.support.jsse.SSLContextParameters;
 import org.apache.camel.support.jsse.SSLContextServerParameters;
 import org.apache.camel.support.jsse.TrustManagersParameters;
 import org.apache.camel.test.AvailablePortFinder;
+import org.apache.hc.client5.http.utils.Base64;
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static io.restassured.RestAssured.get;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class VertxPlatformHttpEngineTest {
     public static SSLContextParameters serverSSLParameters;
@@ -161,6 +174,12 @@ public class VertxPlatformHttpEngineTest {
             assertEquals("/get", it.next().getUri());
             assertEquals("/post", it.next().getUri());
 
+            // should find engine in registry
+            assertNotNull(context.getRegistry().findSingleByType(PlatformHttpEngine.class));
+            EmbeddedHttpService server = context.getRegistry().findSingleByType(EmbeddedHttpService.class);
+            assertNotNull(server);
+            assertEquals("http", server.getScheme());
+            assertEquals(RestAssured.port, server.getServerPort());
         } finally {
             context.stop();
         }
@@ -366,6 +385,7 @@ public class VertxPlatformHttpEngineTest {
 
     @Test
     public void testFileUpload() throws Exception {
+        final String attachmentId = "myTestFile";
         final String fileContent = "Test multipart upload content";
         final File tempFile = File.createTempFile("platform-http", ".txt");
         final CamelContext context = createCamelContext(configuration -> {
@@ -386,7 +406,7 @@ public class VertxPlatformHttpEngineTest {
                     from("platform-http:/upload")
                             .process(exchange -> {
                                 AttachmentMessage message = exchange.getMessage(AttachmentMessage.class);
-                                DataHandler attachment = message.getAttachment(tempFile.getName());
+                                DataHandler attachment = message.getAttachment(attachmentId);
                                 message.setBody(attachment.getContent());
                             });
                 }
@@ -395,7 +415,7 @@ public class VertxPlatformHttpEngineTest {
             context.start();
 
             given()
-                    .multiPart(tempFile)
+                    .multiPart(attachmentId, tempFile)
                     .when()
                     .post("/upload")
                     .then()
@@ -565,7 +585,8 @@ public class VertxPlatformHttpEngineTest {
                 from("platform-http:/secure")
                         .process(exchange -> {
                             Message message = exchange.getMessage();
-                            message.setBody("Secure Route");
+                            message.setBody("Received message with the Authorization="
+                                            + exchange.getMessage().getHeader("Authorization"));
 
                             User user = message.getHeader(VertxPlatformHttpConstants.AUTHENTICATED_USER, User.class);
                             assertThat(user).isNotNull();
@@ -595,9 +616,8 @@ public class VertxPlatformHttpEngineTest {
                     .get("/secure")
                     .then()
                     .statusCode(200)
-                    .header("Authorization", notNullValue())
-                    .body(is("Secure Route"));
-
+                    .body(is("Received message with the Authorization=Basic "
+                             + Base64.encodeBase64String("camel:s3cr3t".getBytes())));
         } finally {
             context.stop();
             vertx.close();
@@ -715,6 +735,36 @@ public class VertxPlatformHttpEngineTest {
     }
 
     @Test
+    public void responseMultipleHeaders() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/test")
+                            .setHeader("nonEmptyFromRoute", constant("nonEmptyFromRouteValue"))
+                            .setBody().simple("Hello World");
+                }
+            });
+
+            context.start();
+
+            RestAssured.given()
+                    .header("nonEmpty", "nonEmptyValue")
+                    .header("empty", "")
+                    .get("/test?duplicated=1&duplicated=2")
+                    .then()
+                    .statusCode(200)
+                    .body(equalTo("Hello World"))
+                    .header("nonEmpty", "nonEmptyValue")
+                    .header("nonEmptyFromRoute", "nonEmptyFromRouteValue");
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
     public void testConsumerSuspended() throws Exception {
         final CamelContext context = createCamelContext();
 
@@ -750,11 +800,289 @@ public class VertxPlatformHttpEngineTest {
         }
     }
 
+    @Test
+    public void testInvalidContentTypeClientRequestValidation() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    restConfiguration()
+                            .component("platform-http")
+                            .bindingMode(RestBindingMode.json)
+                            .clientRequestValidation(true);
+
+                    rest("/rest")
+                            .post("/validate/body").consumes("text/plain").produces("application/json")
+                            .to("direct:rest");
+                    from("direct:rest")
+                            .setBody(simple("Hello ${body}"));
+                }
+            });
+
+            context.start();
+
+            given()
+                    .when()
+                    .body("{\"name\": \"Donald\"}")
+                    .contentType("application/json")
+                    .post("/rest/validate/body")
+                    .then()
+                    .statusCode(415);
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testLocalAddressHeader() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/local/address")
+                            .process(exchange -> {
+                                Message message = exchange.getMessage();
+                                SocketAddress address
+                                        = message.getHeader(VertxPlatformHttpConstants.LOCAL_ADDRESS, SocketAddress.class);
+                                message.setBody(address.hostAddress());
+                            });
+                }
+            });
+
+            context.start();
+
+            get("/local/address")
+                    .then()
+                    .statusCode(200)
+                    .body(notNullValue());
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testRemoteAddressHeader() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/remote/address")
+                            .process(exchange -> {
+                                Message message = exchange.getMessage();
+                                SocketAddress address
+                                        = message.getHeader(VertxPlatformHttpConstants.REMOTE_ADDRESS, SocketAddress.class);
+                                message.setBody(address.hostAddress());
+                            });
+                }
+            });
+
+            context.start();
+
+            get("/remote/address")
+                    .then()
+                    .statusCode(200)
+                    .body(notNullValue());
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testVertxRequestResponseObjects() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/vertx/objects")
+                            .process(exchange -> {
+                                HttpMessage message = exchange.getMessage(HttpMessage.class);
+                                String p = message.getRequest().path();
+                                message.getResponse().putHeader("beer", "Heineken");
+                                message.setBody("request path: " + p);
+                            });
+                }
+            });
+
+            context.start();
+
+            get("/vertx/objects")
+                    .then()
+                    .statusCode(200)
+                    .header("beer", "Heineken")
+                    .body(is("request path: /vertx/objects"));
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testAddCookie() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/add")
+                            .process(exchange -> {
+                                HttpMessage message = (HttpMessage) exchange.getMessage();
+                                message.getRequest().response().addCookie(Cookie.cookie("foo", "bar"));
+                            })
+                            .setBody().constant("add");
+                }
+            });
+
+            context.start();
+
+            given()
+                    .header("cookie", "foo=bar")
+                    .when()
+                    .get("/add")
+                    .then()
+                    .statusCode(200)
+                    .header("set-cookie", "foo=bar")
+                    .body(equalTo("add"));
+
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testRemoveCookie() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/remove")
+                            .process(exchange -> {
+                                HttpMessage message = (HttpMessage) exchange.getMessage();
+                                Cookie removed = message.getRequest().response().removeCookie("foo");
+                                assertNotNull(removed);
+                                assertEquals("foo", removed.getName());
+                                assertEquals("", removed.getValue());
+                            })
+                            .setBody().constant("remove");
+                }
+            });
+
+            context.start();
+
+            given()
+                    .header("cookie", "foo=bar")
+                    .when()
+                    .get("/remove")
+                    .then()
+                    .statusCode(200)
+                    .header("set-cookie", startsWith("foo=; Max-Age=0; Expires="))
+                    .body(equalTo("remove"));
+
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testReplaceCookie() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/replace")
+                            .process(exchange -> {
+                                HttpMessage message = (HttpMessage) exchange.getMessage();
+                                assertEquals(1, message.getRequest().cookieCount());
+                                message.getRequest().response()
+                                        .addCookie(Cookie.cookie("XSRF-TOKEN", "88533580000c314").setPath("/"));
+                                Map<String, Cookie> deprecatedMap = message.getRequest().cookieMap();
+                                assertFalse(((ServerCookie) deprecatedMap.get("XSRF-TOKEN")).isFromUserAgent());
+                                assertEquals("/", deprecatedMap.get("XSRF-TOKEN").getPath());
+                            })
+                            .setBody().constant("replace");
+                }
+            });
+
+            context.start();
+
+            given()
+                    .header("cookie", "XSRF-TOKEN=c359b44aef83415")
+                    .when()
+                    .get("/replace")
+                    .then()
+                    .statusCode(200)
+                    .header("set-cookie", "XSRF-TOKEN=88533580000c314; Path=/")
+                    .body(equalTo("replace"));
+
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testResponseTypeConversionErrorHandled() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/error/response")
+                            // Set the response to something that can't be type converted
+                            .setBody().constant(Collections.EMPTY_SET);
+                }
+            });
+
+            context.start();
+
+            get("/error/response")
+                    .then()
+                    .statusCode(500);
+        } finally {
+            context.stop();
+        }
+    }
+
+    @Test
+    public void testResponseBadQueryParamErrorHandled() throws Exception {
+        final CamelContext context = createCamelContext();
+
+        try {
+            context.addRoutes(new RouteBuilder() {
+                @Override
+                public void configure() {
+                    from("platform-http:/error/response")
+                            .setBody().constant("Error");
+                }
+            });
+
+            context.start();
+
+            // Add a query param that Vert.x cannot handle
+            get("/error/response?::")
+                    .then()
+                    .statusCode(500);
+        } finally {
+            context.stop();
+        }
+    }
+
     static CamelContext createCamelContext() throws Exception {
         return createCamelContext(null);
     }
 
-    private static CamelContext createCamelContext(ServerConfigurationCustomizer customizer) throws Exception {
+    static CamelContext createCamelContext(ServerConfigurationCustomizer customizer) throws Exception {
         int port = AvailablePortFinder.getNextAvailable();
         VertxPlatformHttpServerConfiguration conf = new VertxPlatformHttpServerConfiguration();
         conf.setBindPort(port);

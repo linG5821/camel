@@ -38,7 +38,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -56,6 +56,8 @@ public class KafkaConsumerUnresolvableHealthCheckIT extends KafkaHealthCheckTest
         KafkaComponent kafka = new KafkaComponent(context);
         kafka.init();
         kafka.getConfiguration().setBrokers(service.getBootstrapServers().replace("localhost", "locaIhost"));
+        // turn of pre validation so we startup and can see failure in health checks
+        kafka.getConfiguration().setPreValidateHostAndPort(false);
         context.addComponent("kafka", kafka);
     }
 

@@ -17,6 +17,7 @@
 package org.apache.camel.component.file.strategy;
 
 import java.io.File;
+import java.util.Date;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
@@ -57,17 +58,12 @@ public class FileChangedExclusiveReadLockStrategy extends MarkerFileExclusiveRea
         long lastModified = Long.MIN_VALUE;
         long length = Long.MIN_VALUE;
         StopWatch watch = new StopWatch();
-        long startTime = System.currentTimeMillis();
+        long startTime = (new Date()).getTime();
 
         while (!exclusive) {
             // timeout check
             if (timeout > 0) {
-                long delta = watch.taken();
-                if (delta > timeout) {
-                    CamelLogger.log(LOG, readLockLoggingLevel,
-                            "Cannot acquire read lock within " + timeout + " millis. Will skip the file: " + file);
-                    // we could not get the lock within the timeout period, so
-                    // return false
+                if (isTimedOut(watch, target, timeout, readLockLoggingLevel)) {
                     return false;
                 }
             }
@@ -80,15 +76,16 @@ public class FileChangedExclusiveReadLockStrategy extends MarkerFileExclusiveRea
 
             long newLastModified = target.lastModified();
             long newLength = target.length();
-            long minTriggerTime = startTime + minAge;
-            long currentTime = System.currentTimeMillis();
+            long newOlderThan = startTime + watch.taken() - minAge;
 
             LOG.trace("Previous last modified: {}, new last modified: {}", lastModified, newLastModified);
             LOG.trace("Previous length: {}, new length: {}", length, newLength);
-            LOG.trace("Min File Trigger Time: {}", minTriggerTime);
+            LOG.trace("New older than threshold: {}", newOlderThan);
 
-            if (newLength >= minLength && currentTime >= minTriggerTime
-                    && newLastModified == lastModified && newLength == length) {
+            // CHECKSTYLE:OFF
+            if (newLength >= minLength && ((minAge == 0 && newLastModified == lastModified && newLength == length)
+                    || (minAge != 0 && newLastModified < newOlderThan))) {
+            // CHECKSTYLE:ON
                 LOG.trace("Read lock acquired.");
                 exclusive = true;
             } else {
@@ -114,6 +111,7 @@ public class FileChangedExclusiveReadLockStrategy extends MarkerFileExclusiveRea
             Thread.sleep(checkInterval);
             return false;
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.debug("Sleep interrupted while waiting for exclusive read lock, so breaking out");
             return true;
         }

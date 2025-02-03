@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Default {@link org.apache.camel.console.DevConsoleRegistry}.
  */
-@org.apache.camel.spi.annotations.DevConsole(DevConsoleRegistry.NAME)
+@org.apache.camel.spi.annotations.DevConsole(name = DevConsoleRegistry.NAME, description = "Default Console Registry")
 @DeferredContextBinding
 public class DefaultDevConsoleRegistry extends ServiceSupport implements DevConsoleRegistry {
 
@@ -188,7 +188,7 @@ public class DefaultDevConsoleRegistry extends ServiceSupport implements DevCons
                     }
                 }
                 String time = TimeUtils.printDuration(watch.taken(), true);
-                LOG.debug("Dev consoles (scanned: {} registered:{}) loaded in {}", col.size(), added, time);
+                LOG.debug("Dev consoles (scanned: {} registered: {}) loaded in {}", col.size(), added, time);
             }
         }
     }

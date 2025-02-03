@@ -24,21 +24,17 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
  * Unit test with poll enrich
  */
 public class MailPollEnrichNoMailTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser bill = Mailbox.getOrCreateUser("bill", "secret");
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         prepareMailbox();
-        super.setUp();
     }
 
     @Test

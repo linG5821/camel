@@ -29,11 +29,11 @@ import org.apache.camel.util.ObjectHelper;
 import org.robotframework.RobotFramework;
 
 /**
- * Pass camel exchanges to acceptence test written in Robot DSL.
+ * Pass camel exchanges to acceptance test written in Robot DSL.
  */
 @UriEndpoint(firstVersion = "3.0.0", scheme = "robotframework", title = "Robot Framework",
              syntax = "robotframework:resourceUri", category = { Category.TESTING },
-             headersClass = RobotFrameworkCamelConstants.class)
+             remote = false, headersClass = RobotFrameworkCamelConstants.class)
 public class RobotFrameworkEndpoint extends ResourceEndpoint {
 
     @UriParam
@@ -43,6 +43,11 @@ public class RobotFrameworkEndpoint extends ResourceEndpoint {
                                   RobotFrameworkCamelConfiguration configuration) {
         super(uri, component, resourceUri);
         this.configuration = configuration;
+    }
+
+    @Override
+    public boolean isRemote() {
+        return false;
     }
 
     @Override

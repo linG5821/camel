@@ -95,10 +95,10 @@ public class ManagedSupervisingRouteControllerTest extends ManagementTestSupport
     }
 
     @Override
-    protected RouteBuilder createRouteBuilder() throws Exception {
+    protected RouteBuilder createRouteBuilder() {
         return new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 getContext().addComponent("jms", new MyJmsComponent());
 
                 from("timer:foo").to("mock:foo").routeId("foo");
@@ -107,26 +107,26 @@ public class ManagedSupervisingRouteControllerTest extends ManagementTestSupport
 
                 from("jms:cake").to("mock:cake").routeId("cake");
 
-                from("seda:bar").routeId("bar").noAutoStartup().to("mock:bar");
+                from("seda:bar").routeId("bar").autoStartup(false).to("mock:bar");
             }
         };
     }
 
-    private class MyJmsComponent extends SedaComponent {
+    private static class MyJmsComponent extends SedaComponent {
 
         @Override
-        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) throws Exception {
+        protected Endpoint createEndpoint(String uri, String remaining, Map<String, Object> parameters) {
             return new MyJmsEndpoint();
         }
     }
 
-    private class MyJmsEndpoint extends SedaEndpoint {
+    private static class MyJmsEndpoint extends SedaEndpoint {
 
         public MyJmsEndpoint() {
         }
 
         @Override
-        public Consumer createConsumer(Processor processor) throws Exception {
+        public Consumer createConsumer(Processor processor) {
             return new MyJmsConsumer(this, processor);
         }
 
@@ -143,7 +143,7 @@ public class ManagedSupervisingRouteControllerTest extends ManagementTestSupport
         }
 
         @Override
-        protected void doStart() throws Exception {
+        protected void doStart() {
             throw new IllegalArgumentException("Cannot start");
         }
     }

@@ -28,6 +28,7 @@ import org.apache.camel.spi.Metadata;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriPath;
+import org.apache.camel.util.StringHelper;
 
 /**
  * Expose WebSocket endpoints using the Atmosphere framework.
@@ -39,7 +40,11 @@ import org.apache.camel.spi.UriPath;
 @Metadata(excludeProperties = "httpUri,contextPath,cookieHandler,connectionClose,authMethod,authMethodPriority,authUsername,authPassword,authDomain,authHost,"
                               + "copyHeaders,httpMethod,ignoreResponseBody,preserveHostHeader,throwExceptionOnFailure,okStatusCodeRange,"
                               + "proxyAuthScheme,proxyAuthMethod,proxyAuthUsername,proxyAuthPassword,proxyAuthHost,proxyAuthPort,proxyAuthDomain,"
-                              + "proxyAuthNtHost,proxyAuthScheme,proxyHost,proxyPort")
+                              + "proxyAuthNtHost,proxyAuthScheme,proxyHost,proxyPort,"
+                              + "oauth2ClientId,oauth2ClientSecret,oauth2TokenEndpoint,oauth2Scope,oauth2CacheTokens,oauth2CachedTokensDefaultExpirySeconds,oauth2CachedTokensExpirationMarginSeconds",
+          annotations = {
+                  "protocol=http",
+          })
 public class WebsocketEndpoint extends ServletEndpoint {
 
     private WebSocketStore store;
@@ -56,11 +61,13 @@ public class WebsocketEndpoint extends ServletEndpoint {
     public WebsocketEndpoint(String endPointURI, WebsocketComponent component, URI httpUri) throws URISyntaxException {
         super(endPointURI, component, httpUri);
 
-        //TODO find a better way of assigning the store
-        int idx = endPointURI.indexOf('?');
-
-        this.servicePath = idx > -1 ? endPointURI.substring(0, idx) : endPointURI;
+        this.servicePath = StringHelper.before(endPointURI, "?", endPointURI);
         this.store = component.getWebSocketStore(servicePath);
+    }
+
+    @Override
+    public String getServiceProtocol() {
+        return "ws";
     }
 
     @Override

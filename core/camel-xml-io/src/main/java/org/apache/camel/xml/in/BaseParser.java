@@ -22,6 +22,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,11 +49,15 @@ import org.apache.camel.util.URISupport;
 import org.apache.camel.xml.io.MXParser;
 import org.apache.camel.xml.io.XmlPullParser;
 import org.apache.camel.xml.io.XmlPullParserException;
+import org.apache.camel.xml.io.XmlPullParserLocationException;
 
 public class BaseParser {
 
+    public static final String DEFAULT_NAMESPACE = "http://camel.apache.org/schema/spring";
+
     protected final MXParser parser;
     protected String namespace;
+    protected final Set<String> secondaryNamespaces = new HashSet<>();
     protected Resource resource;
 
     public BaseParser(Resource resource) throws IOException, XmlPullParserException {
@@ -77,14 +82,18 @@ public class BaseParser {
         this.parser = new MXParser();
         this.parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
         this.parser.setInput(input, null);
-        this.namespace = namespace != null ? namespace : "";
+        this.namespace = namespace != null && !namespace.isEmpty() ? namespace : DEFAULT_NAMESPACE;
     }
 
     public BaseParser(Reader reader, String namespace) throws IOException, XmlPullParserException {
         this.parser = new MXParser();
         this.parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
         this.parser.setInput(reader);
-        this.namespace = namespace != null ? namespace : "";
+        this.namespace = namespace != null && !namespace.isEmpty() ? namespace : DEFAULT_NAMESPACE;
+    }
+
+    public void addSecondaryNamespace(String namespace) {
+        this.secondaryNamespaces.add(namespace);
     }
 
     protected <T> T doParse(
@@ -97,18 +106,32 @@ public class BaseParser {
             T definition, AttributeHandler<T> attributeHandler, ElementHandler<T> elementHandler, ValueHandler<T> valueHandler,
             boolean supportsExternalNamespaces)
             throws IOException, XmlPullParserException {
-        if (definition instanceof LineNumberAware) {
-            // we want to get the line number where the tag starts (in case its multi-line)
-            int line = parser.getStartLineNumber();
-            if (line == -1) {
-                line = parser.getLineNumber();
+
+        try {
+            return doParseXml(definition, attributeHandler, elementHandler, valueHandler, supportsExternalNamespaces);
+        } catch (Exception e) {
+            if (e instanceof XmlPullParserLocationException) {
+                throw e;
             }
-            ((LineNumberAware) definition).setLineNumber(line);
-            if (resource != null) {
-                ((LineNumberAware) definition).setLocation(resource.getLocation());
+            // wrap in XmlPullParserLocationException so we have line-precise error
+            String msg = e.getMessage();
+            Throwable cause = e;
+            if (e instanceof XmlPullParserException) {
+                if (e.getCause() != null) {
+                    cause = e.getCause();
+                    msg = e.getCause().getMessage();
+                }
             }
+            throw new XmlPullParserLocationException(msg, resource, parser.getLineNumber(), parser.getColumnNumber(), cause);
         }
-        if (definition instanceof NamespaceAware) {
+    }
+
+    protected <T> T doParseXml(
+            T definition, AttributeHandler<T> attributeHandler, ElementHandler<T> elementHandler, ValueHandler<T> valueHandler,
+            boolean supportsExternalNamespaces)
+            throws IOException, XmlPullParserException {
+        setLocation(definition);
+        if (definition instanceof NamespaceAware namespaceAware) {
             final Map<String, String> namespaces = new LinkedHashMap<>();
             for (int i = 0; i < parser.getNamespaceCount(parser.getDepth()); i++) {
                 final String prefix = parser.getNamespacePrefix(i);
@@ -116,7 +139,7 @@ public class BaseParser {
                     namespaces.put(prefix, parser.getNamespaceUri(i));
                 }
             }
-            ((NamespaceAware) definition).setNamespaces(namespaces);
+            namespaceAware.setNamespaces(namespaces);
         }
         for (int i = 0; i < parser.getAttributeCount(); i++) {
             String name = parser.getAttributeName(i);
@@ -125,7 +148,7 @@ public class BaseParser {
             if (name.equals("uri") || name.endsWith("Uri")) {
                 val = URISupport.removeNoiseFromUri(val);
             }
-            if (Objects.equals(ns, "") || Objects.equals(ns, namespace)) {
+            if (matchNamespace(ns, true)) {
                 if (attributeHandler == null || !attributeHandler.accept(definition, name, val)) {
                     handleUnexpectedAttribute(ns, name);
                 }
@@ -149,7 +172,7 @@ public class BaseParser {
                     }
                 } else {
                     // pass element to the handler only if matches the declared namespace for the parser
-                    if (Objects.equals(ns, namespace)) {
+                    if (matchNamespace(ns, false)) {
                         if (elementHandler == null || !elementHandler.accept(definition, name)) {
                             handleUnexpectedElement(namespace, name);
                         }
@@ -158,7 +181,18 @@ public class BaseParser {
                     }
                 }
             } else if (event == XmlPullParser.END_TAG) {
-                return definition;
+                // we need to check first if the end tag is from
+                // and unexpected element which we should ignore,
+                // and continue parsing (special need for camel-xml-io-dsl)
+                String ns = parser.getNamespace();
+                String name = parser.getName();
+                boolean ignore = false;
+                if (supportsExternalNamespaces) {
+                    ignore = ignoreUnexpectedElement(ns, name);
+                }
+                if (!ignore) {
+                    return definition;
+                }
             } else {
                 throw new XmlPullParserException(
                         "expected START_TAG or END_TAG not " + XmlPullParser.TYPES[event], parser, null);
@@ -176,24 +210,14 @@ public class BaseParser {
             if (event == XmlPullParser.TEXT) {
                 if (!parser.isWhitespace()) {
                     T definition = definitionSupplier.get();
-                    if (definition instanceof LineNumberAware) {
-                        // we want to get the line number where the tag starts (in case its multi-line)
-                        int line = parser.getStartLineNumber();
-                        if (line == -1) {
-                            line = parser.getLineNumber();
-                        }
-                        ((LineNumberAware) definition).setLineNumber(line);
-                        if (resource != null) {
-                            ((LineNumberAware) definition).setLocation(resource.getLocation());
-                        }
-                    }
+                    setLocation(definition);
                     valueHandler.accept(definition, parser.getText());
                     answer.add(definition);
                 }
             } else if (event == XmlPullParser.START_TAG) {
                 String ns = parser.getNamespace();
                 String name = parser.getName();
-                if (Objects.equals(ns, namespace)) {
+                if (matchNamespace(ns, false)) {
                     if (!"value".equals(name)) {
                         handleUnexpectedElement(ns, name);
                     }
@@ -203,7 +227,7 @@ public class BaseParser {
             } else if (event == XmlPullParser.END_TAG) {
                 String ns = parser.getNamespace();
                 String name = parser.getName();
-                if (Objects.equals(ns, namespace)) {
+                if (matchNamespace(ns, false)) {
                     if ("value".equals(name)) {
                         continue;
                     }
@@ -212,6 +236,20 @@ public class BaseParser {
             } else {
                 throw new XmlPullParserException(
                         "expected START_TAG or END_TAG not " + XmlPullParser.TYPES[event], parser, null);
+            }
+        }
+    }
+
+    private <T> void setLocation(T definition) {
+        if (definition instanceof LineNumberAware lineNumberAware) {
+            // we want to get the line number where the tag starts (in case its multi-line)
+            int line = parser.getStartLineNumber();
+            if (line == -1) {
+                line = parser.getLineNumber();
+            }
+            lineNumberAware.setLineNumber(line);
+            if (resource != null) {
+                lineNumberAware.setLocation(resource.getLocation());
             }
         }
     }
@@ -276,7 +314,7 @@ public class BaseParser {
 
     protected Element doParseDOMElement(String rootElementName, String namespace, List<Element> existing)
             throws XmlPullParserException, IOException {
-        Document doc = null;
+        Document doc;
         if (existing != null && !existing.isEmpty()) {
             doc = existing.get(0).getOwnerDocument();
         } else {
@@ -322,6 +360,14 @@ public class BaseParser {
         throw new XmlPullParserException("Unexpected text '" + text + "'");
     }
 
+    protected boolean ignoreUnexpectedElement(String namespace, String name) throws XmlPullParserException {
+        // special for dataFormats (wrapper)
+        if ("dataFormats".equals(name)) {
+            return true;
+        }
+        return false;
+    }
+
     protected void expectTag(String name) throws XmlPullParserException, IOException {
         if (parser.nextTag() != XmlPullParser.START_TAG) {
             throw new XmlPullParserException(
@@ -342,7 +388,7 @@ public class BaseParser {
             throw new XmlPullParserException("Expected starting tag");
         }
 
-        if (!Objects.equals(name, parser.getName()) || !Objects.equals(namespace, parser.getNamespace())) {
+        if (!Objects.equals(name, parser.getName()) || !matchNamespace(namespace, parser.getNamespace(), null, false)) {
             return false;
         }
 
@@ -356,7 +402,21 @@ public class BaseParser {
 
         String pn = parser.getName();
         boolean match = Objects.equals(name, pn) || Objects.equals(name2, pn);
-        if (!match || !Objects.equals(namespace, parser.getNamespace())) {
+        if (!match || !matchNamespace(namespace, parser.getNamespace(), null, false)) {
+            return ""; // empty tag
+        }
+
+        return pn;
+    }
+
+    protected String getNextTag(String name, String name2, String name3) throws XmlPullParserException, IOException {
+        if (parser.nextTag() != XmlPullParser.START_TAG) {
+            throw new XmlPullParserException("Expected starting tag");
+        }
+
+        String pn = parser.getName();
+        boolean match = Objects.equals(name, pn) || Objects.equals(name2, pn) || Objects.equals(name3, pn);
+        if (!match || !matchNamespace(namespace, parser.getNamespace(), null, false)) {
             return ""; // empty tag
         }
 
@@ -422,17 +482,17 @@ public class BaseParser {
         try {
             // Set secure processing
             factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, Boolean.TRUE);
-        } catch (ParserConfigurationException e) {
+        } catch (ParserConfigurationException ignore) {
         }
         try {
             // Disable the external-general-entities by default
             factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        } catch (ParserConfigurationException e) {
+        } catch (ParserConfigurationException ignore) {
         }
         try {
             // Disable the external-parameter-entities by default
             factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        } catch (ParserConfigurationException e) {
+        } catch (ParserConfigurationException ignore) {
         }
         // setup the SecurityManager by default if it's apache xerces
         try {
@@ -442,20 +502,52 @@ public class BaseParser {
                 // Here we just use the default setting of the SeurityManager
                 factory.setAttribute("http://apache.org/xml/properties/security-manager", sm);
             }
-        } catch (Exception e) {
+        } catch (Exception ignore) {
         }
         return factory;
     }
 
-    interface AttributeHandler<T> {
+    protected interface AttributeHandler<T> {
         boolean accept(T definition, String name, String value) throws IOException, XmlPullParserException;
     }
 
-    interface ElementHandler<T> {
+    protected interface ElementHandler<T> {
         boolean accept(T definition, String name) throws IOException, XmlPullParserException;
     }
 
-    interface ValueHandler<T> {
+    protected interface ValueHandler<T> {
         void accept(T definition, String value) throws IOException, XmlPullParserException;
     }
+
+    protected boolean matchNamespace(String ns, boolean optional) {
+        return matchNamespace(ns, namespace, secondaryNamespaces, optional);
+    }
+
+    protected static boolean matchNamespace(String ns, String namespace, Set<String> secondaryNamespaces, boolean optional) {
+        if (optional && ns.isEmpty()) {
+            return true;
+        }
+        if (Objects.equals(ns, namespace)) {
+            return true;
+        }
+        if (DEFAULT_NAMESPACE.equals(ns) && namespace.isEmpty()) {
+            return true;
+        }
+        if (DEFAULT_NAMESPACE.equals(namespace) && ns.isEmpty()) {
+            return true;
+        }
+        if (secondaryNamespaces != null) {
+            for (String second : secondaryNamespaces) {
+                if (Objects.equals(ns, second)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    protected static String sanitizeUri(String uri) {
+        return uri;
+    }
+
 }

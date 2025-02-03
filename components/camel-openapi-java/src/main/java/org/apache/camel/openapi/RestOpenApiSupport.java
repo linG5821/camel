@@ -19,15 +19,20 @@ package org.apache.camel.openapi;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import io.swagger.v3.core.util.Json;
+import io.swagger.v3.core.util.Json31;
+import io.swagger.v3.core.util.Yaml;
+import io.swagger.v3.core.util.Yaml31;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -52,6 +57,8 @@ import static org.apache.camel.openapi.RestDefinitionsResolver.JMX_REST_DEFINITI
  * This allows rest-dsl components such as servlet/jetty/netty-http to offer OpenApi API listings with minimal effort.
  */
 public class RestOpenApiSupport {
+
+    public static DateFormat DEFAULT_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
 
     static final String HEADER_X_FORWARDED_PREFIX = "X-Forwarded-Prefix";
     static final String HEADER_X_FORWARDED_HOST = "X-Forwarded-Host";
@@ -98,22 +105,17 @@ public class RestOpenApiSupport {
     }
 
     static void setupXForwardedHeaders(OpenAPI openApi, Map<String, Object> headers) {
-
         String basePath = getBasePathFromOasDocument(openApi);
-
         String host = (String) headers.get(HEADER_HOST);
-
         String forwardedPrefix = (String) headers.get(HEADER_X_FORWARDED_PREFIX);
 
         if (ObjectHelper.isNotEmpty(forwardedPrefix)) {
             basePath = URISupport.joinPaths(forwardedPrefix, basePath);
         }
-
         String forwardedHost = (String) headers.get(HEADER_X_FORWARDED_HOST);
         if (ObjectHelper.isNotEmpty(forwardedHost)) {
             host = forwardedHost;
         }
-
         String proto = (String) headers.get(HEADER_X_FORWARDED_PROTO);
         if (openApi.getServers() != null) {
             openApi.getServers().clear();
@@ -139,13 +141,11 @@ public class RestOpenApiSupport {
                         parseVariables(openapi.getServers().get(0).getUrl(),
                                 openapi.getServers().get(0)));
                 host = serverUrl.getHost();
-
             } catch (MalformedURLException e) {
-                LOG.info("error when parsing OpenApi 3.0 doc server url", e);
+                LOG.debug("Error when parsing OpenApi 3.0 doc server url. This exception is ignored.", e);
             }
         }
         return host;
-
     }
 
     public static String getBasePathFromOasDocument(final OpenAPI openapi) {
@@ -182,10 +182,10 @@ public class RestOpenApiSupport {
         Pattern p = Pattern.compile("\\{(.*?)}");
         Matcher m = p.matcher(url);
         while (m.find()) {
-            String var = m.group(1);
-            if (server != null && server.getVariables() != null && server.getVariables().get(var) != null) {
-                String varValue = server.getVariables().get(var).getDefault();
-                url = url.replace("{" + var + "}", varValue);
+            String variable = m.group(1);
+            if (server != null && server.getVariables() != null && server.getVariables().get(variable) != null) {
+                String varValue = server.getVariables().get(variable).getDefault();
+                url = url.replace("{" + variable + "}", varValue);
             }
         }
         return url;
@@ -285,97 +285,83 @@ public class RestOpenApiSupport {
                         () -> new IllegalArgumentException("Cannot find camel-openapi-java on classpath."));
     }
 
+    public void setupXForwardHeaders(RestApiResponseAdapter response, Exchange exchange) {
+        setupXForwardedHeaders(response.getOpenApi(), exchange.getMessage().getHeaders());
+    }
+
     public void renderResourceListing(
             CamelContext camelContext, RestApiResponseAdapter response,
             BeanConfig openApiConfig, boolean json,
-            Map<String, Object> headers, ClassResolver classResolver,
-            RestConfiguration configuration)
+            ClassResolver classResolver,
+            RestConfiguration configuration,
+            Exchange exchange)
             throws Exception {
-        LOG.trace("renderResourceListing");
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        LOG.trace("renderResourceListing");
 
         if (cors) {
             setupCorsHeaders(response, configuration.getCorsHeaders());
         }
 
         List<RestDefinition> rests = getRestDefinitions(camelContext);
-
         if (rests != null) {
             final Map<String, Object> apiProperties = configuration.getApiProperties() != null
                     ? configuration.getApiProperties() : new HashMap<>();
-            if (json) {
-                response.setHeader(Exchange.CONTENT_TYPE, (String) apiProperties
-                        .getOrDefault("api.specification.contentType.json", "application/json"));
-
-                // read the rest-dsl into openApi model
-                OpenAPI openApi = reader.read(
-                        camelContext, rests, openApiConfig, camelContext.getName(), classResolver);
-                if (configuration.isUseXForwardHeaders()) {
-                    setupXForwardedHeaders(openApi, headers);
-                }
-
+            String key = json ? "api.specification.contentType.json" : "api.specification.contentType.yaml";
+            String defaultValue = json ? "application/json" : "text/yaml";
+            response.setHeader(Exchange.CONTENT_TYPE, (String) apiProperties.getOrDefault(key, defaultValue));
+            // read the rest-dsl into openApi model
+            OpenAPI openApi = response.getOpenApi();
+            if (openApi == null) {
+                openApi = reader.read(camelContext, rests, openApiConfig, camelContext.getName(), classResolver);
                 if (!configuration.isApiVendorExtension()) {
                     clearVendorExtensions(openApi);
                 }
-                // Serialize to JSON
-                byte[] bytes = null;
-                if (!openApiConfig.isOpenApi3()) {
-                    OpenAPI3to2 converter = new OpenAPI3to2();
-                    converter.convertOpenAPI3to2(openApi);
-                    bytes = converter.getSwaggerAsJson();
-                } else {
-                    String result = io.swagger.v3.core.util.Json31.pretty(openApi);
-                    bytes = result.getBytes(StandardCharsets.UTF_8);
-                }
-                int len = bytes.length;
-                response.setHeader(Exchange.CONTENT_LENGTH, Integer.toString(len));
-
-                response.writeBytes(bytes);
-            } else {
-                response.setHeader(Exchange.CONTENT_TYPE, (String) apiProperties
-                        .getOrDefault("api.specification.contentType.yaml", "text/yaml"));
-
-                // read the rest-dsl into openApi model
-                OpenAPI openApi = reader.read(
-                        camelContext, rests, openApiConfig, camelContext.getName(), classResolver);
-                if (configuration.isUseXForwardHeaders()) {
-                    setupXForwardedHeaders(openApi, headers);
-                }
-
-                if (!configuration.isApiVendorExtension()) {
-                    clearVendorExtensions(openApi);
-                }
-                byte[] bytes = null;
-                if (!openApiConfig.isOpenApi3()) {
-                    OpenAPI3to2 converter = new OpenAPI3to2();
-                    converter.convertOpenAPI3to2(openApi);
-                    bytes = converter.getSwaggerAsYaml();
-                } else {
-                    String result = io.swagger.v3.core.util.Yaml.pretty(openApi);
-                    bytes = result.getBytes();
-                }
-
-                int len = bytes.length;
-                response.setHeader(Exchange.CONTENT_LENGTH, Integer.toString(len));
-
-                response.writeBytes(bytes);
             }
+            response.setOpenApi(openApi);
+            if (configuration.isUseXForwardHeaders() && exchange != null) {
+                setupXForwardHeaders(response, exchange);
+            }
+            byte[] bytes = getFromOpenAPI(openApi, openApiConfig, byte[].class, json);
+            int len = bytes.length;
+            response.setHeader(Exchange.CONTENT_LENGTH, Integer.toString(len));
+            response.writeBytes(bytes);
         } else {
             response.noContent();
         }
     }
 
-    public static String getJsonFromOpenAPI(OpenAPI openApi3, BeanConfig openApiConfig) {
-        if (!openApiConfig.isOpenApi3()) {
-            OpenAPI3to2 converter = new OpenAPI3to2();
-            converter.convertOpenAPI3to2(openApi3);
-            return new String(converter.getSwaggerAsJson());
+    public static String getJsonFromOpenAPIAsString(OpenAPI openApi, BeanConfig config) {
+        return getFromOpenAPI(openApi, config, String.class, true);
+    }
+
+    public static <T extends Object> T getFromOpenAPI(OpenAPI openApi, BeanConfig config, Class<T> type, boolean json) {
+        if (config.isOpenApi2()) {
+            throw new IllegalArgumentException("OpenAPI 2.x is not supported");
         } else {
-            return io.swagger.v3.core.util.Json.pretty(openApi3);
+            ObjectMapper mapper = json ? config.isOpenApi31() ? Json31.mapper() : Json.mapper()
+                    : config.isOpenApi31() ? Yaml31.mapper() : Yaml.mapper();
+            String result = getFromOpenAPI3(openApi, mapper);
+            if (type.equals(byte[].class)) {
+                if (result != null) {
+                    return type.cast(result.getBytes(StandardCharsets.UTF_8));
+                } else {
+                    return type.cast(new byte[0]);
+                }
+            }
+            return type.cast(result);
         }
     }
 
+    private static String getFromOpenAPI3(OpenAPI openAPI3, ObjectMapper mapper) {
+        DateFormat origin = mapper.getDateFormat();
+        try {
+            mapper.setDateFormat(DEFAULT_DATE_FORMAT);
+            return mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(openAPI3);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            mapper.setDateFormat(origin);
+        }
+    }
 }

@@ -28,8 +28,17 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
     @ManagedAttribute(description = "Route ID")
     String getRouteId();
 
+    @ManagedAttribute(description = "Node Prefix ID")
+    String getNodePrefixId();
+
     @ManagedAttribute(description = "Route Group")
     String getRouteGroup();
+
+    @ManagedAttribute(description = "Is this route created from a route template (or Kamelet)")
+    boolean isCreatedByRouteTemplate();
+
+    @ManagedAttribute(description = "Is this route created from a Kamelet")
+    boolean isCreatedByKamelet();
 
     @ManagedAttribute(description = "Route Properties")
     TabularData getRouteProperties();
@@ -79,13 +88,13 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
     @ManagedAttribute(description = "Route Policy List")
     String getRoutePolicyList();
 
-    @ManagedAttribute(description = "Average load over the last minute")
+    @ManagedAttribute(description = "Average load (inflight messages, not cpu) over the last minute")
     String getLoad01();
 
-    @ManagedAttribute(description = "Average load over the last five minutes")
+    @ManagedAttribute(description = "Average load (inflight messages, not cpu) over the last five minutes")
     String getLoad05();
 
-    @ManagedAttribute(description = "Average load over the last fifteen minutes")
+    @ManagedAttribute(description = "Average load (inflight messages, not cpu) over the last fifteen minutes")
     String getLoad15();
 
     @ManagedAttribute(description = "Throughput message/second")
@@ -122,7 +131,7 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
     String dumpRouteAsXml(boolean resolvePlaceholders) throws Exception;
 
     @ManagedOperation(description = "Dumps the route as XML")
-    String dumpRouteAsXml(boolean resolvePlaceholders, boolean resolveDelegateEndpoints) throws Exception;
+    String dumpRouteAsXml(boolean resolvePlaceholders, boolean generatedIds) throws Exception;
 
     @ManagedOperation(description = "Dumps the route as YAML")
     String dumpRouteAsYaml() throws Exception;
@@ -131,7 +140,10 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
     String dumpRouteAsYaml(boolean resolvePlaceholders) throws Exception;
 
     @ManagedOperation(description = "Dumps the route as YAML")
-    String dumpRouteAsYaml(boolean resolvePlaceholders, boolean resolveDelegateEndpoints) throws Exception;
+    String dumpRouteAsYaml(boolean resolvePlaceholders, boolean uriAsParameters) throws Exception;
+
+    @ManagedOperation(description = "Dumps the route as YAML")
+    String dumpRouteAsYaml(boolean resolvePlaceholders, boolean uriAsParameters, boolean generatedIds) throws Exception;
 
     @ManagedOperation(description = "Dumps the route stats as XML")
     String dumpRouteStatsAsXml(boolean fullStats, boolean includeProcessors) throws Exception;
@@ -159,4 +171,14 @@ public interface ManagedRouteMBean extends ManagedPerformanceCounterMBean {
 
     @ManagedOperation(description = "IDs for the processors that are part of this route")
     Collection<String> processorIds() throws Exception;
+
+    @ManagedOperation(description = "Updates the route from XML")
+    void updateRouteFromXml(String xml) throws Exception;
+
+    @ManagedAttribute(description = "Whether update route from XML is enabled")
+    boolean isUpdateRouteEnabled();
+
+    @ManagedAttribute(description = "Whether the consumer connects to remote or local systems")
+    boolean isRemoteEndpoint();
+
 }

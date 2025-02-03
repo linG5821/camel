@@ -37,8 +37,9 @@ import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import static org.apache.camel.component.couchbase.CouchbaseConstants.COUCHBASE_RESUME_ACTION;
 import static org.awaitility.Awaitility.await;
 
-@DisabledIfSystemProperty(named = "ci.env.name", matches = "apache.org", disabledReason = "Flaky on Apache CI")
-@Tags({ @Tag("couchbase-6") })
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Too resource intensive for most systems to run reliably")
+@Tags({ @Tag("couchbase-71") })
 public class ConsumeResumeStrategyIT extends CouchbaseIntegrationTestBase {
     static class TestCouchbaseResumeAdapter implements ResumeActionAware {
         volatile boolean setResumeActionCalled;

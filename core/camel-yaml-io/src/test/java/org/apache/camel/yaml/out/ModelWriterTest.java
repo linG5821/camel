@@ -16,9 +16,9 @@
  */
 package org.apache.camel.yaml.out;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.nio.file.Paths;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
@@ -39,9 +39,12 @@ import org.apache.camel.model.dataformat.CsvDataFormat;
 import org.apache.camel.model.language.ConstantExpression;
 import org.apache.camel.model.language.HeaderExpression;
 import org.apache.camel.model.language.SimpleExpression;
-import org.apache.camel.util.IOHelper;
+import org.apache.camel.model.rest.RestDefinition;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import static org.apache.camel.util.IOHelper.stripLineComments;
 
 public class ModelWriterTest {
 
@@ -61,7 +64,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route0.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route0b.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -82,7 +85,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route1.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route1.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -108,7 +111,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route2.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route2.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -120,15 +123,7 @@ public class ModelWriterTest {
         RouteDefinition route = new RouteDefinition();
         route.setId("myRoute3");
         route.setInput(new FromDefinition("direct:start2"));
-        AggregateDefinition ag = new AggregateDefinition();
-        SimpleExpression e = new SimpleExpression("${body}");
-        e.setResultTypeName("int.class");
-        ag.setExpression(e);
-        ag.setCorrelationExpression(new ExpressionSubElementDefinition(new HeaderExpression("myHeader")));
-        ConstantExpression cons = new ConstantExpression("5");
-        cons.setResultTypeName("int.class");
-        ag.setCompletionSizeExpression(new ExpressionSubElementDefinition(cons));
-        ag.setCompletionTimeoutExpression(new ExpressionSubElementDefinition(new ConstantExpression("4000")));
+        final AggregateDefinition ag = createAggregateDefinition();
         route.addOutput(ag);
         ToDefinition to = new ToDefinition("kafka:line");
         ag.addOutput(to);
@@ -138,8 +133,21 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route3.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route3.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
+    }
+
+    private static AggregateDefinition createAggregateDefinition() {
+        AggregateDefinition ag = new AggregateDefinition();
+        SimpleExpression e = new SimpleExpression("${body}");
+        e.setResultTypeName("int.class");
+        ag.setExpression(e);
+        ag.setCorrelationExpression(new ExpressionSubElementDefinition(new HeaderExpression("myHeader")));
+        ConstantExpression cons = new ConstantExpression("5");
+        cons.setResultTypeName("int.class");
+        ag.setCompletionSizeExpression(new ExpressionSubElementDefinition(cons));
+        ag.setCompletionTimeoutExpression(new ExpressionSubElementDefinition(new ConstantExpression("4000")));
+        return ag;
     }
 
     @Test
@@ -159,7 +167,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route4.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route4.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -184,10 +192,11 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route5.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route5.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
+    @Disabled("TODO: https://issues.apache.org/jira/browse/CAMEL-21490")
     @Test
     public void testFromChoice() throws Exception {
         StringWriter sw = new StringWriter();
@@ -207,7 +216,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route6.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route6.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -219,7 +228,7 @@ public class ModelWriterTest {
         CamelContext context = new DefaultCamelContext();
         context.addRoutes(new RouteBuilder() {
             @Override
-            public void configure() throws Exception {
+            public void configure() {
                 from("direct:start7").routeId("myRoute7")
                     .doTry()
                         .to("mock:try1")
@@ -239,7 +248,7 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(mcc.getRouteDefinition("myRoute7"));
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route7.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route7.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -272,7 +281,7 @@ public class ModelWriterTest {
         writer.writeRoutesDefinition(routes);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route8.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route8b.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 
@@ -292,7 +301,29 @@ public class ModelWriterTest {
         writer.writeRouteDefinition(route);
 
         String out = sw.toString();
-        String expected = IOHelper.loadText(new FileInputStream("src/test/resources/route9.yaml"));
+        String expected = stripLineComments(Paths.get("src/test/resources/route9.yaml"), "#", true);
+        Assertions.assertEquals(expected, out);
+    }
+
+    @Test
+    @Disabled("CAMEL-20402")
+    public void testRest() throws Exception {
+        StringWriter sw = new StringWriter();
+        ModelWriter writer = new ModelWriter(sw);
+
+        RestDefinition rest = new RestDefinition();
+        rest.verb("get").to("direct:start");
+        writer.writeRestDefinition(rest);
+
+        RouteDefinition route = new RouteDefinition();
+        route.setId("myRoute10");
+        route.setInput(new FromDefinition("direct:start"));
+        SetBodyDefinition sb = new SetBodyDefinition(new SimpleExpression("${body}${body}"));
+        route.addOutput(sb);
+        writer.writeRouteDefinition(route);
+
+        String out = sw.toString();
+        String expected = stripLineComments(Paths.get("src/test/resources/route10.yaml"), "#", true);
         Assertions.assertEquals(expected, out);
     }
 

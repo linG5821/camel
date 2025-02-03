@@ -31,6 +31,7 @@ import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.kubernetes.KubernetesConstants;
 import org.apache.camel.component.kubernetes.KubernetesTestSupport;
 import org.apache.camel.component.mock.MockEndpoint;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,11 @@ public class KubernetesEventsConsumerIT extends KubernetesTestSupport {
 
     @EndpointInject("mock:result")
     protected MockEndpoint mockResultEndpoint;
+
+    @BeforeEach
+    void beforeEach() {
+        MockEndpoint.resetMocks(context);
+    }
 
     private void setupFullEventWithHeaders(Exchange exchange) {
         exchange.getIn().setHeader(KubernetesConstants.KUBERNETES_NAMESPACE_NAME, "default");
@@ -223,8 +229,8 @@ public class KubernetesEventsConsumerIT extends KubernetesTestSupport {
         public void process(Exchange exchange) {
             Message in = exchange.getIn();
             Event event = exchange.getIn().getBody(Event.class);
-            log.info("Got event with event name: " + event.getMetadata().getName() + " and action "
-                     + in.getHeader(KubernetesConstants.KUBERNETES_EVENT_ACTION));
+            log.info("Got event with event name: {} and action {}", event.getMetadata().getName(),
+                    in.getHeader(KubernetesConstants.KUBERNETES_EVENT_ACTION));
         }
     }
 }

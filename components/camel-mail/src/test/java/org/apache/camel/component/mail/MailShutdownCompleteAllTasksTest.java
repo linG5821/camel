@@ -28,7 +28,6 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,14 +36,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Unit test for shutdown.
  */
 public class MailShutdownCompleteAllTasksTest extends CamelTestSupport {
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser jones = Mailbox.getOrCreateUser("jones", "secret");
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         prepareMailbox();
-        super.setUp();
     }
 
     @Override
@@ -96,7 +92,7 @@ public class MailShutdownCompleteAllTasksTest extends CamelTestSupport {
         for (int i = 0; i < 5; i++) {
             messages[i] = new MimeMessage(sender.getSession());
             messages[i].setText("Message " + i);
-            messages[i].setHeader("Message-ID", "" + i);
+            messages[i].setHeader("Message-ID", Integer.toString(i));
         }
         folder.appendMessages(messages);
         folder.close(true);

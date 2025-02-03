@@ -98,14 +98,11 @@ public class TwitterTimelineEndpoint extends AbstractTwitterEndpoint {
             case MENTIONS:
                 handler = new MentionsConsumerHandler(this);
                 break;
-            case RETWEETSOFME:
-                handler = new RetweetsConsumerHandler(this);
-                break;
             case LIST:
                 handler = new UserListConsumerHandler(this, user, list);
                 break;
             case USER:
-                if (user == null || user.trim().isEmpty()) {
+                if (user == null || user.isBlank()) {
                     throw new IllegalArgumentException("Fetch type set to USER TIMELINE but no user was set.");
                 } else {
                     handler = new UserConsumerHandler(this, user);

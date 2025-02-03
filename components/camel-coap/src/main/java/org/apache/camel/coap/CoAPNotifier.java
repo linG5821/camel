@@ -17,11 +17,9 @@
 package org.apache.camel.coap;
 
 import java.net.URI;
-import java.util.Optional;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.support.DefaultProducer;
-import org.eclipse.californium.core.CoapClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +31,6 @@ public class CoAPNotifier extends DefaultProducer {
     private static final Logger LOG = LoggerFactory.getLogger(CoAPNotifier.class);
 
     private final CoAPEndpoint endpoint;
-    private CoapClient client;
 
     public CoAPNotifier(CoAPEndpoint endpoint) {
         super(endpoint);
@@ -42,14 +39,13 @@ public class CoAPNotifier extends DefaultProducer {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        URI uri = Optional.ofNullable(exchange.getIn().getHeader(CoAPConstants.COAP_URI, URI.class))
-                .orElse(endpoint.getUri());
+        URI uri = endpoint.getUri();
         CamelCoapResource resource = endpoint.getCamelCoapResource(uri.getPath());
         if (resource == null) {
             throw new IllegalStateException("Resource not found: " + endpoint.getUri());
         }
         if (!resource.isObservable()) {
-            LOG.warn("Ignoring notification attempt for resource that is not observable: " + endpoint.getUri());
+            LOG.warn("Ignoring notification attempt for resource that is not observable: {}", endpoint.getUri());
             return;
         }
 

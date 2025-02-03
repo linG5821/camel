@@ -19,6 +19,7 @@ package org.apache.camel.component.file.remote;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
@@ -32,6 +33,7 @@ import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -89,7 +91,7 @@ public class RemoteFileIgnoreDoPollErrorTest {
         Exception ex = assertThrows(GenericFileOperationFailedException.class,
                 () -> consumer.doSafePollSubDirectory("anyPath", "adir", list, 0));
 
-        assertTrue(ex.getCause() instanceof IllegalStateException);
+        assertInstanceOf(IllegalStateException.class, ex.getCause());
     }
 
     @Test
@@ -127,7 +129,7 @@ public class RemoteFileIgnoreDoPollErrorTest {
             }
 
             @Override
-            protected boolean isMatched(GenericFile<Object> file, String doneFileName, Object[] files) {
+            protected boolean isMatched(Supplier<GenericFile<Object>> file, String doneFileName, Object[] files) {
                 return false;
             }
 
@@ -139,6 +141,11 @@ public class RemoteFileIgnoreDoPollErrorTest {
             @Override
             protected void updateFileHeaders(GenericFile<Object> genericFile, Message message) {
                 // noop
+            }
+
+            @Override
+            protected Supplier<String> getRelativeFilePath(String endpointPath, String path, String absolutePath, Object file) {
+                return null;
             }
         };
     }

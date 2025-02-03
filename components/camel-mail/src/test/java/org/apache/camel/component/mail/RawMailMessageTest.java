@@ -32,39 +32,31 @@ import org.apache.camel.component.mail.Mailbox.MailboxUser;
 import org.apache.camel.component.mail.Mailbox.Protocol;
 import org.apache.camel.component.mock.MockEndpoint;
 import org.apache.camel.test.junit5.CamelTestSupport;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test for Mail using camel headers to set recipient subject.
  */
 public class RawMailMessageTest extends CamelTestSupport {
 
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser jonesPop3 = Mailbox.getOrCreateUser("jonesPop3", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser jonesRawPop3 = Mailbox.getOrCreateUser("jonesRawPop3", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser jonesImap = Mailbox.getOrCreateUser("jonesImap", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser jonesRawImap = Mailbox.getOrCreateUser("jonesRawImap", "secret");
-    @SuppressWarnings({ "checkstyle:ConstantName" })
     private static final MailboxUser davsclaus = Mailbox.getOrCreateUser("davsclaus", "secret");
 
     @Override
-    @BeforeEach
-    public void setUp() throws Exception {
+    public void doPreSetup() throws Exception {
         Mailbox.clearAll();
         prepareMailbox(jonesPop3);
         prepareMailbox(jonesRawPop3);
         prepareMailbox(jonesImap);
         prepareMailbox(jonesRawImap);
-        super.setUp();
     }
 
     @Test
@@ -89,7 +81,7 @@ public class RawMailMessageTest extends CamelTestSupport {
         // START SNIPPET: e1
         // get access to the raw jakarta.mail.Message as shown below
         Message javaMailMessage = exchange.getIn(MailMessage.class).getMessage();
-        assertNotNull(javaMailMessage);
+        assertNotNull(javaMailMessage, "The mail message should not be null");
 
         assertEquals("Camel rocks", javaMailMessage.getSubject());
         // END SNIPPET: e1
@@ -107,7 +99,7 @@ public class RawMailMessageTest extends CamelTestSupport {
 
     private void testRawMessageConsumer(String type, MailboxUser user) throws Exception {
         Mailbox mailboxRaw = user.getInbox();
-        assertEquals(1, mailboxRaw.getMessageCount());
+        assertEquals(1, mailboxRaw.getMessageCount(), "expected 1 message in the mailbox");
 
         MockEndpoint mock = getMockEndpoint("mock://rawMessage" + type);
         mock.expectedMessageCount(1);
@@ -120,8 +112,8 @@ public class RawMailMessageTest extends CamelTestSupport {
         assertEquals("hurz", mailMessage.getSubject(), "mail subject should be hurz");
 
         Map<String, Object> headers = mock.getExchanges().get(0).getIn().getHeaders();
-        assertNotNull(headers);
-        assertTrue(!headers.isEmpty());
+        assertNotNull(headers, "headers should not be null");
+        assertFalse(headers.isEmpty(), "headers should not be empty");
     }
 
     @Test
@@ -136,7 +128,7 @@ public class RawMailMessageTest extends CamelTestSupport {
 
     private void testNormalMessageConsumer(String type, MailboxUser user) throws Exception {
         Mailbox mailbox = user.getInbox();
-        assertEquals(1, mailbox.getMessageCount());
+        assertEquals(1, mailbox.getMessageCount(), "expected 1 message in the mailbox");
 
         MockEndpoint mock = getMockEndpoint("mock://normalMessage" + type);
         mock.expectedMessageCount(1);
@@ -150,8 +142,8 @@ public class RawMailMessageTest extends CamelTestSupport {
         assertNull(subject, "mail subject should not be available");
 
         Map<String, Object> headers = mock.getExchanges().get(0).getIn().getHeaders();
-        assertNotNull(headers);
-        assertTrue(!headers.isEmpty());
+        assertNotNull(headers, "headers should not be null");
+        assertFalse(headers.isEmpty(), "headers should not be empty");
     }
 
     private void prepareMailbox(MailboxUser user) throws Exception {
@@ -163,7 +155,7 @@ public class RawMailMessageTest extends CamelTestSupport {
         folder.open(Folder.READ_WRITE);
         folder.expunge();
 
-        InputStream is = getClass().getResourceAsStream("/SignedMailTestCaseHurz.elm");
+        InputStream is = getClass().getResourceAsStream("/SignedMailTestCaseHurz.txt");
         Message hurzMsg = new MimeMessage(sender.getSession(), is);
         Message[] messages = new Message[] { hurzMsg };
 

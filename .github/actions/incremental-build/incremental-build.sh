@@ -15,17 +15,21 @@
 # limitations under the License.
 #
 
-# Modify maven options here if needed
-MVN_DEFAULT_OPTS="-Dmvnd.threads=2 -V -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -Daether.connector.http.connectionMaxTtl=120 -Daether.connector.requestTimeout=300000 -e -Dmaven.artifact.threads=25 -Daether.dependencyCollector.impl=bf"
-MVN_OPTS=${MVN_OPTS:-$MVN_DEFAULT_OPTS}
+echo "Using MVND_OPTS=$MVND_OPTS"
 
 maxNumberOfBuildableProjects=100
 maxNumberOfTestableProjects=50
 
 function findProjectRoot () {
   local path=${1}
-  while [[ "$path" != "." && ! -e "$path/pom.xml" ]]; do
-    path=$(dirname $path)
+  while [[ "$path" != "." ]]; do
+    if [[ ! -e "$path/pom.xml" ]] ; then
+      path=$(dirname $path)
+    elif [[ $(dirname $path) == */src/it ]] ; then
+      path=$(dirname $(dirname $path))
+    else
+      break
+    fi
   done
   echo "$path"
 }
@@ -33,11 +37,12 @@ function findProjectRoot () {
 function hasLabel() {
     local issueNumber=${1}
     local label="incremental-${2}"
+    local repository=${3}
     curl -s \
       -H "Accept: application/vnd.github+json" \
       -H "Authorization: Bearer ${GITHUB_TOKEN}"\
       -H "X-GitHub-Api-Version: 2022-11-28" \
-      "https://api.github.com/repos/apache/camel/issues/${issueNumber}/labels" | jq -r '.[].name' | grep -c "$label"
+      "https://api.github.com/repos/${repository}/issues/${issueNumber}/labels" | jq -r '.[].name' | grep -c "$label"
 }
 
 function main() {
@@ -45,10 +50,12 @@ function main() {
   local mode=${2}
   local log="incremental-${mode}.log"
   local prId=${3}
+  local ret=0
+  local repository=${4}
 
   echo "Searching for affected projects"
   local projects
-  projects=$(curl -s "https://patch-diff.githubusercontent.com/raw/apache/camel/pull/${prId}.diff" | sed -n -e '/^diff --git a/p' | awk '{print $3}' | cut -b 3- | sed 's|\(.*\)/.*|\1|' | uniq | sort)
+  projects=$(curl -s "https://patch-diff.githubusercontent.com/raw/${repository}/pull/${prId}.diff" | sed -n -e '/^diff --git a/p' | awk '{print $3}' | cut -b 3- | sed 's|\(.*\)/.*|\1|' | uniq | sort)
   local pl=""
   local lastProjectRoot=""
   local buildAll=false
@@ -59,8 +66,10 @@ function main() {
       local projectRoot
       projectRoot=$(findProjectRoot ${project})
       if [[ ${projectRoot} = "." ]] ; then
-        echo "There root project is affected, so a complete build is triggered"
+        echo "The root project is affected, so a complete build is triggered"
         buildAll=true
+        totalAffected=1
+        break
       elif [[ ${projectRoot} != "${lastProjectRoot}" ]] ; then
         (( totalAffected ++ ))
         pl="$pl,${projectRoot}"
@@ -68,6 +77,7 @@ function main() {
       fi
     fi
   done
+
   if [[ ${totalAffected} = 0 ]] ; then
     echo "There is nothing to build"
     exit 0
@@ -77,45 +87,41 @@ function main() {
   fi
   pl="${pl:1}"
 
-  if [[ ${mode} = "checkstyle" ]] ; then
-    if [[ ${buildAll} = "true" ]] ; then
-      echo "Launching checkstyle command against all projects"
-      $mavenBinary -l $log $MVN_OPTS -Dcheckstyle.failOnViolation=true checkstyle:checkstyle
-    else
-      echo "Launching checkstyle command against the projects ${pl}"
-      $mavenBinary -l $log $MVN_OPTS -Dcheckstyle.failOnViolation=true checkstyle:checkstyle -pl "$pl"
-    fi
-  elif [[ ${mode} = "build" ]] ; then
+  if [[ ${mode} = "build" ]] ; then
     local mustBuildAll
-    mustBuildAll=$(hasLabel ${prId} "build-all")
+    mustBuildAll=$(hasLabel ${prId} "build-all" ${repository})
     if [[ ${mustBuildAll} = "1" ]] ; then
       echo "The build-all label has been detected thus all projects must be built"
       buildAll=true
     fi
     if [[ ${buildAll} = "true" ]] ; then
-      echo "Launching fast build command against all projects"
-      $mavenBinary -l $log $MVN_OPTS -Pfastinstall install
+      echo "Building all projects"
+      $mavenBinary -l $log $MVND_OPTS -DskipTests install
+      ret=$?
     else
       local buildDependents
-      buildDependents=$(hasLabel ${prId} "build-dependents")
+      buildDependents=$(hasLabel ${prId} "build-dependents" ${repository})
       local totalTestableProjects
       if [[ ${buildDependents} = "1" ]] ; then
         echo "The build-dependents label has been detected thus the projects that depend on the affected projects will be built"
         totalTestableProjects=0
       else
-        totalTestableProjects=$(mvn -q -amd exec:exec -Dexec.executable="pwd" -pl "$pl" | wc -l)
+        totalTestableProjects=$(./mvnw -q -amd exec:exec -Dexec.executable="pwd" -pl "$pl" | wc -l)
       fi
       if [[ ${totalTestableProjects} -gt ${maxNumberOfTestableProjects} ]] ; then
         echo "Launching fast build command against the projects ${pl}, their dependencies and the projects that depend on them"
-        $mavenBinary -l $log $MVN_OPTS -Pfastinstall install -pl "$pl" -amd -am
+        $mavenBinary -l $log $MVND_OPTS -DskipTests install -pl "$pl" -amd -am
+        ret=$?
       else
         echo "Launching fast build command against the projects ${pl} and their dependencies"
-        $mavenBinary -l $log $MVN_OPTS -Pfastinstall install -pl "$pl" -am
+        $mavenBinary -l $log $MVND_OPTS -DskipTests install -pl "$pl" -am
+        ret=$?
       fi
     fi
+    [[ -z $(git status --porcelain | grep -v antora.yml) ]] || { echo 'There are uncommitted changes'; git status; echo; echo; git diff; exit 1; }
   else
     local mustSkipTests
-    mustSkipTests=$(hasLabel ${prId} "skip-tests")
+    mustSkipTests=$(hasLabel ${prId} "skip-tests" ${repository})
     if [[ ${mustSkipTests} = "1" ]] ; then
       echo "The skip-tests label has been detected thus no test will be launched"
       buildAll=true
@@ -123,23 +129,33 @@ function main() {
       echo "Cannot launch the tests of all projects, so no test will be launched"
     else
       local testDependents
-      testDependents=$(hasLabel ${prId} "test-dependents")
+      testDependents=$(hasLabel ${prId} "test-dependents" ${repository})
       local totalTestableProjects
       if [[ ${testDependents} = "1" ]] ; then
         echo "The test-dependents label has been detected thus the projects that depend on affected projects will be tested"
         totalTestableProjects=0
       else
-        totalTestableProjects=$(mvn -q -amd exec:exec -Dexec.executable="pwd" -pl "$pl" | wc -l)
+        totalTestableProjects=$(./mvnw -q -amd exec:exec -Dexec.executable="pwd" -pl "$pl" | wc -l)
       fi
       if [[ ${totalTestableProjects} -gt ${maxNumberOfTestableProjects} ]] ; then
         echo "There are too many projects to test so only the affected projects are tested"
-        $mavenBinary -l $log $MVN_OPTS install -pl "$pl"
+        $mavenBinary -l $log $MVND_OPTS install -pl "$pl"
+        ret=$?
       else
         echo "Testing the affected projects and the projects that depend on them"
-        $mavenBinary -l $log $MVN_OPTS install -pl "$pl" -amd
+        $mavenBinary -l $log $MVND_OPTS install -pl "$pl" -amd
+        ret=$?
       fi
     fi
   fi
+
+  if [[ ${ret} -ne 0 ]] ; then
+    echo "Processing surefire and failsafe reports to create the summary"
+    echo -e "| Failed Test | Duration | Failure Type |\n| --- | --- | --- |"  > "$GITHUB_STEP_SUMMARY"
+    find . -path '*target/*-reports*' -iname '*.txt' -exec .github/actions/incremental-build/parse_errors.sh {} \;
+  fi
+
+  exit $ret
 }
 
 main "$@"

@@ -88,11 +88,10 @@ public class XMLConverterHelper {
         ObjectHelper.notNull(node, "node");
 
         // If the node is the document, just cast it
-        if (node instanceof Document) {
-            return (Document) node;
+        if (node instanceof Document document) {
+            return document;
             // If the node is an element
-        } else if (node instanceof Element) {
-            Element elem = (Element) node;
+        } else if (node instanceof Element elem) {
             // If this is the root element, return its owner document
             if (elem.getOwnerDocument().getDocumentElement() == elem) {
                 return elem.getOwnerDocument();
@@ -253,7 +252,7 @@ public class XMLConverterHelper {
     private int[] retrieveSaxonVersion(ClassLoader loader) {
         try {
             final Class<?> versionClass = loader.loadClass("net.sf.saxon.Version");
-            final Method method = versionClass.getDeclaredMethod("getStructuredVersionNumber", int[].class);
+            final Method method = versionClass.getDeclaredMethod("getStructuredVersionNumber");
             final Object result = method.invoke(null);
             return (int[]) result;
         } catch (ClassNotFoundException e) {
@@ -298,7 +297,7 @@ public class XMLConverterHelper {
             String key = (String) prop.getKey();
             if (key.startsWith(DOCUMENT_BUILDER_FACTORY_FEATURE)) {
                 String uri = StringHelper.after(key, ":");
-                Boolean value = Boolean.valueOf((String) prop.getValue());
+                boolean value = Boolean.parseBoolean((String) prop.getValue());
                 try {
                     factory.setFeature(uri, value);
                     features.add("feature " + uri + " value " + value);
@@ -309,10 +308,10 @@ public class XMLConverterHelper {
             }
         }
         if (!features.isEmpty()) {
-            StringBuilder featureString = new StringBuilder();
+            StringBuilder featureString = new StringBuilder(256);
             // just log the configured feature
             for (String feature : features) {
-                if (featureString.length() != 0) {
+                if (!featureString.isEmpty()) {
                     featureString.append(", ");
                 }
                 featureString.append(feature);

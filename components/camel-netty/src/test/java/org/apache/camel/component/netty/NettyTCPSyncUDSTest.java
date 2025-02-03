@@ -19,16 +19,22 @@ package org.apache.camel.component.netty;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Add {@code <classifier>linux-x86_64</classifier>} to io.netty:netty-transport-native-epoll dependency to make this
- * test work
+ *
+ * @see <a href="https://netty.io/wiki/native-transports.html">about netty native transport</a>
  */
-@Disabled("Requires native library to load, can be run manually")
+@EnabledOnOs(value = { OS.LINUX, OS.MAC, OS.FREEBSD, OS.OPENBSD },
+             architectures = { "amd64", "aarch_64" })
+// This is to avoid "bind(..) failed: File name too long" when running on CI.
+@DisabledIfSystemProperty(named = "ci.env.name", matches = ".*",
+                          disabledReason = "Most CI environments use temporary build directories whose path is too long for the Netty native code leading to failure")
 public class NettyTCPSyncUDSTest extends BaseNettyTest {
 
     @Test

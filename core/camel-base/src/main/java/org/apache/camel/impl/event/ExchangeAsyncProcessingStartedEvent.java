@@ -16,6 +16,8 @@
  */
 package org.apache.camel.impl.event;
 
+import java.io.Serial;
+
 import org.apache.camel.Exchange;
 import org.apache.camel.Route;
 import org.apache.camel.spi.CamelEvent;
@@ -31,14 +33,14 @@ import org.apache.camel.support.RoutePolicySupport;
  */
 public class ExchangeAsyncProcessingStartedEvent extends AbstractExchangeEvent
         implements CamelEvent.ExchangeAsyncProcessingStartedEvent {
-    private static final long serialVersionUID = -19248832613958122L;
+    private static final @Serial long serialVersionUID = -19248832613958122L;
 
     public ExchangeAsyncProcessingStartedEvent(Exchange source) {
         super(source);
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         return getExchange().getExchangeId();
     }
 }

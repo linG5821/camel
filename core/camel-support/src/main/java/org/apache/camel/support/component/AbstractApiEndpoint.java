@@ -74,7 +74,7 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
     private List<ApiMethod> candidates;
 
     // cached Executor service
-    private ExecutorService executorService;
+    private volatile ExecutorService executorService;
 
     // cached property names and values
     private Set<String> endpointPropertyNames;
@@ -192,9 +192,9 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
     @Override
     protected void configureConsumer(Consumer consumer) throws Exception {
         super.configureConsumer(consumer);
-        if (getConfiguration() instanceof AbstractApiConfiguration && consumer instanceof AbstractApiConsumer) {
+        if (getConfiguration() instanceof AbstractApiConfiguration config && consumer instanceof AbstractApiConsumer) {
             ((AbstractApiConsumer<?, ?>) consumer)
-                    .setSplitResult(((AbstractApiConfiguration) getConfiguration()).isSplitResult());
+                    .setSplitResult(config.isSplitResult());
         }
     }
 
@@ -337,13 +337,17 @@ public abstract class AbstractApiEndpoint<E extends ApiName, T>
     }
 
     public final ExecutorService getExecutorService() {
-        if (this.executorService == null) {
-            // synchronize on class to avoid creating duplicate class level executors
-            synchronized (getClass()) {
-                this.executorService = getExecutorService(getClass(), getCamelContext(), getThreadProfileName());
+        if (executorService == null) {
+            lock.lock();
+            try {
+                if (executorService == null) {
+                    executorService = getExecutorService(getClass(), getCamelContext(), getThreadProfileName());
+                }
+            } finally {
+                lock.unlock();
             }
         }
-        return this.executorService;
+        return executorService;
     }
 
     /**

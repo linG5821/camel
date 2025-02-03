@@ -33,7 +33,7 @@ public class Dhis2Get {
     }
 
     public InputStream resource(
-            String path, String fields, String filter, RootJunctionEnum rootJunction,
+            String path, String fields, List<String> filter, RootJunctionEnum rootJunction,
             Map<String, Object> queryParams) {
         GetOperation getOperation = newGetOperation(path, fields, filter, rootJunction, queryParams);
 
@@ -41,15 +41,17 @@ public class Dhis2Get {
     }
 
     protected GetOperation newGetOperation(
-            String path, String fields, String filter, RootJunctionEnum rootJunction,
+            String path, String fields, List<String> filters, RootJunctionEnum rootJunction,
             Map<String, Object> queryParams) {
         GetOperation getOperation = dhis2Client.get(path);
         if (fields != null) {
             getOperation.withFields(fields);
         }
 
-        if (filter != null) {
-            getOperation.withFilter(filter);
+        if (filters != null) {
+            for (String filter : filters) {
+                getOperation.withFilter(filter);
+            }
         }
 
         if (rootJunction != null) {
@@ -75,32 +77,20 @@ public class Dhis2Get {
         return getOperation;
     }
 
-    public <T> Iterator<T> collection(
-            String path, String itemType, Boolean paging, String fields, String filter, RootJunctionEnum rootJunction,
+    public Iterator<Dhis2Resource> collection(
+            String path, String arrayName, Boolean paging, String fields, List<String> filter,
+            RootJunctionEnum rootJunction,
             Map<String, Object> queryParams) {
         GetOperation getOperation = newGetOperation(path, fields, filter, rootJunction, queryParams);
-        Iterable<T> iterable;
 
         IterableDhis2Response iteratorDhis2Response;
-        if (paging == null || paging) {
+        if (paging != null && paging) {
             iteratorDhis2Response = getOperation.withPaging().transfer();
         } else {
             iteratorDhis2Response = getOperation.withoutPaging().transfer();
         }
 
-        if (itemType == null) {
-            iterable = (Iterable<T>) iteratorDhis2Response
-                    .returnAs(Map.class, path);
-        } else {
-            try {
-                iterable = (Iterable<T>) iteratorDhis2Response
-                        .returnAs(Class.forName(itemType), path);
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        return iterable.iterator();
+        return iteratorDhis2Response.returnAs(Dhis2Resource.class, arrayName).iterator();
     }
 
 }

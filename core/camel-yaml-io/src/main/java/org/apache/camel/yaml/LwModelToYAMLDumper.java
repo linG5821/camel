@@ -18,18 +18,22 @@ package org.apache.camel.yaml;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.DelegateEndpoint;
-import org.apache.camel.Endpoint;
+import org.apache.camel.CamelContextAware;
 import org.apache.camel.Expression;
 import org.apache.camel.NamedNode;
+import org.apache.camel.model.BeanFactoryDefinition;
+import org.apache.camel.model.DataFormatDefinition;
 import org.apache.camel.model.ExpressionNode;
 import org.apache.camel.model.FromDefinition;
 import org.apache.camel.model.OptionalIdentifiedDefinition;
@@ -39,6 +43,7 @@ import org.apache.camel.model.RouteTemplatesDefinition;
 import org.apache.camel.model.RoutesDefinition;
 import org.apache.camel.model.SendDefinition;
 import org.apache.camel.model.ToDynamicDefinition;
+import org.apache.camel.model.dataformat.DataFormatsDefinition;
 import org.apache.camel.model.language.ExpressionDefinition;
 import org.apache.camel.spi.ModelToYAMLDumper;
 import org.apache.camel.spi.NamespaceAware;
@@ -56,12 +61,13 @@ public class LwModelToYAMLDumper implements ModelToYAMLDumper {
 
     @Override
     public String dumpModelAsYaml(CamelContext context, NamedNode definition) throws Exception {
-        return dumpModelAsYaml(context, definition, false, false);
+        return dumpModelAsYaml(context, definition, false, false, true);
     }
 
     @Override
     public String dumpModelAsYaml(
-            CamelContext context, NamedNode definition, boolean resolvePlaceholders, boolean resolveDelegateEndpoints)
+            CamelContext context, NamedNode definition, boolean resolvePlaceholders,
+            boolean uriAsParameters, boolean generatedIds)
             throws Exception {
         Properties properties = new Properties();
         Map<String, String> namespaces = new LinkedHashMap<>();
@@ -85,12 +91,11 @@ public class LwModelToYAMLDumper implements ModelToYAMLDumper {
             @Override
             protected void doWriteOptionalIdentifiedDefinitionAttributes(OptionalIdentifiedDefinition<?> def)
                     throws IOException {
-                // write customId if not false
-                if (Boolean.TRUE.equals(def.getCustomId())) {
-                    doWriteAttribute("customId", toString(def.getCustomId()));
+
+                if (generatedIds || Boolean.TRUE.equals(def.getCustomId())) {
+                    // write id
+                    doWriteAttribute("id", def.getId());
                 }
-                // write id
-                doWriteAttribute("id", def.getId());
                 // write location information
                 if (context.isDebugging()) {
                     String loc = (def instanceof RouteDefinition ? ((RouteDefinition) def).getInput() : def).getLocation();
@@ -119,18 +124,8 @@ public class LwModelToYAMLDumper implements ModelToYAMLDumper {
 
             @Override
             protected void attribute(String name, Object value) throws IOException {
-                if (value != null) {
-                    if (resolveDelegateEndpoints && "uri".equals(name)) {
-                        String uri = resolve(value.toString(), properties);
-                        Endpoint endpoint = context.hasEndpoint(uri);
-                        if (endpoint instanceof DelegateEndpoint) {
-                            endpoint = ((DelegateEndpoint) endpoint).getEndpoint();
-                            value = endpoint.getEndpointUri();
-                        }
-                    }
-                    if (resolvePlaceholders) {
-                        value = resolve(value.toString(), properties);
-                    }
+                if (resolvePlaceholders && value != null) {
+                    value = resolve(value.toString(), properties);
                 }
                 super.attribute(name, value);
             }
@@ -158,7 +153,67 @@ public class LwModelToYAMLDumper implements ModelToYAMLDumper {
         } else if (definition instanceof RouteDefinition route) {
             extractor.accept(route);
         }
-        writer.writeOptionalIdentifiedDefinitionRef((OptionalIdentifiedDefinition) definition);
+
+        writer.setUriAsParameters(uriAsParameters);
+        writer.setCamelContext(context);
+        writer.start();
+        try {
+            writer.writeOptionalIdentifiedDefinitionRef((OptionalIdentifiedDefinition) definition);
+        } finally {
+            writer.stop();
+        }
+
+        return buffer.toString();
+    }
+
+    @Override
+    public String dumpBeansAsYaml(CamelContext context, List<Object> beans) throws Exception {
+        StringWriter buffer = new StringWriter();
+        BeanModelWriter writer = new BeanModelWriter(buffer);
+
+        List<BeanFactoryDefinition<?>> list = new ArrayList<>();
+        for (Object bean : beans) {
+            if (bean instanceof BeanFactoryDefinition<?> rb) {
+                list.add(rb);
+            }
+        }
+        writer.setCamelContext(context);
+        writer.start();
+        try {
+            writer.writeBeans(list);
+        } finally {
+            writer.stop();
+        }
+
+        return buffer.toString();
+    }
+
+    /**
+     * Dumps the global data formats as YAML
+     *
+     * @param  context     the CamelContext
+     * @param  dataFormats list of data formats (DataFormatDefinition)
+     * @return             the output in YAML (is formatted)
+     * @throws Exception   is throw if error marshalling to YAML
+     */
+    @Override
+    public String dumpDataFormatsAsYaml(CamelContext context, Map<String, Object> dataFormats) throws Exception {
+        StringWriter buffer = new StringWriter();
+        DataFormatModelWriter writer = new DataFormatModelWriter(buffer);
+
+        Map<String, DataFormatDefinition> map = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : dataFormats.entrySet()) {
+            if (entry.getValue() instanceof DataFormatDefinition def) {
+                map.put(entry.getKey(), def);
+            }
+        }
+        writer.setCamelContext(context);
+        writer.start();
+        try {
+            writer.writeDataFormats(map);
+        } finally {
+            writer.stop();
+        }
 
         return buffer.toString();
     }
@@ -239,13 +294,158 @@ public class LwModelToYAMLDumper implements ModelToYAMLDumper {
 
         NamespaceAware na = null;
         Expression exp = ed.getExpressionValue();
-        if (exp instanceof NamespaceAware) {
-            na = (NamespaceAware) exp;
-        } else if (ed instanceof NamespaceAware) {
-            na = (NamespaceAware) ed;
+        if (exp instanceof NamespaceAware namespaceAware) {
+            na = namespaceAware;
+        } else if (ed instanceof NamespaceAware namespaceAware) {
+            na = namespaceAware;
         }
 
         return na;
+    }
+
+    private static class BeanModelWriter implements CamelContextAware {
+
+        private final StringWriter buffer;
+        private CamelContext camelContext;
+
+        public BeanModelWriter(StringWriter buffer) {
+            this.buffer = buffer;
+        }
+
+        @Override
+        public CamelContext getCamelContext() {
+            return camelContext;
+        }
+
+        @Override
+        public void setCamelContext(CamelContext camelContext) {
+            this.camelContext = camelContext;
+        }
+
+        public void start() {
+            // noop
+        }
+
+        public void stop() {
+            // noop
+        }
+
+        public void writeBeans(List<BeanFactoryDefinition<?>> beans) {
+            if (beans.isEmpty()) {
+                return;
+            }
+            buffer.write("- beans:\n");
+            for (BeanFactoryDefinition<?> b : beans) {
+                doWriteBeanFactoryDefinition(b);
+            }
+        }
+
+        private void doWriteBeanFactoryDefinition(BeanFactoryDefinition<?> b) {
+            String type = b.getType();
+            if (type.startsWith("#class:")) {
+                type = type.substring(7);
+            }
+            buffer.write(String.format("    - name: %s%n", b.getName()));
+            buffer.write(String.format("      type: \"%s\"%n", type));
+            if (b.getFactoryBean() != null) {
+                buffer.write(String.format("      factoryBean: \"%s\"%n", b.getFactoryBean()));
+            }
+            if (b.getFactoryMethod() != null) {
+                buffer.write(String.format("      factoryMethod: \"%s\"%n", b.getFactoryMethod()));
+            }
+            if (b.getBuilderClass() != null) {
+                buffer.write(String.format("      builderClass: \"%s\"%n", b.getBuilderClass()));
+            }
+            if (b.getBuilderMethod() != null) {
+                buffer.write(String.format("      builderMethod: \"%s\"%n", b.getBuilderMethod()));
+            }
+            if (b.getInitMethod() != null) {
+                buffer.write(String.format("      initMethod: \"%s\"%n", b.getInitMethod()));
+            }
+            if (b.getDestroyMethod() != null) {
+                buffer.write(String.format("      destroyMethod: \"%s\"%n", b.getDestroyMethod()));
+            }
+            if (b.getScriptLanguage() != null) {
+                buffer.write(String.format("      scriptLanguage: \"%s\"%n", b.getScriptLanguage()));
+            }
+            if (b.getScript() != null) {
+                buffer.write(String.format("      script: \"%s\"%n", b.getScript()));
+            }
+            if (b.getConstructors() != null && !b.getConstructors().isEmpty()) {
+                buffer.write(String.format("      constructors:%n"));
+                final AtomicInteger counter = new AtomicInteger();
+                b.getConstructors().forEach((key, value) -> {
+                    if (key == null) {
+                        key = counter.getAndIncrement();
+                    }
+                    buffer.write(String.format("        %d: \"%s\"%n", key, value));
+                });
+            }
+            if (b.getProperties() != null && !b.getProperties().isEmpty()) {
+                buffer.write(String.format("      properties:%n"));
+                b.getProperties().forEach((key, value) -> {
+                    if (value instanceof String) {
+                        buffer.write(String.format("        %s: \"%s\"%n", key, value));
+                    } else {
+                        buffer.write(String.format("        %s: %s%n", key, value));
+                    }
+                });
+            }
+        }
+    }
+
+    private static class DataFormatModelWriter implements CamelContextAware {
+
+        private final StringWriter buffer;
+        private CamelContext camelContext;
+
+        public DataFormatModelWriter(StringWriter buffer) {
+            this.buffer = buffer;
+        }
+
+        @Override
+        public CamelContext getCamelContext() {
+            return camelContext;
+        }
+
+        @Override
+        public void setCamelContext(CamelContext camelContext) {
+            this.camelContext = camelContext;
+        }
+
+        public void start() {
+            // noop
+        }
+
+        public void stop() {
+            // noop
+        }
+
+        public void writeDataFormats(Map<String, DataFormatDefinition> dataFormats) throws Exception {
+            if (dataFormats.isEmpty()) {
+                return;
+            }
+
+            buffer.write("- dataFormats:\n");
+
+            DataFormatsDefinition def = new DataFormatsDefinition();
+            def.setDataFormats(new ArrayList<>(dataFormats.values()));
+
+            StringWriter tmp = new StringWriter();
+            ModelWriter writer = new ModelWriter(tmp);
+            writer.setCamelContext(camelContext);
+            writer.start();
+            try {
+                writer.writeDataFormatsDefinition(def);
+            } finally {
+                writer.stop();
+            }
+            for (String line : tmp.toString().split("\n")) {
+                buffer.write("    ");
+                buffer.write(line);
+                buffer.write("\n");
+            }
+        }
     }
 
 }

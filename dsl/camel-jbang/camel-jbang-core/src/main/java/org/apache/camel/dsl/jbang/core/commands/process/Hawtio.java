@@ -30,15 +30,15 @@ import org.apache.camel.tooling.maven.MavenArtifact;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
-@Command(name = "hawtio", description = "Launch Hawtio web console")
+@Command(name = "hawtio", description = "Launch Hawtio web console", sortOptions = false, showDefaultValues = true)
 public class Hawtio extends CamelCommand {
 
     @CommandLine.Parameters(description = "Name or pid of running Camel integration", arity = "0..1")
     String name;
 
     @CommandLine.Option(names = { "--version" },
-                        description = "Version of the Hawtio web console", defaultValue = "2.17.3")
-    String version = "2.17.3";
+                        description = "Version of the Hawtio web console", defaultValue = "4.2.0")
+    String version = "4.2.0";
 
     // use port 8888 as 8080 is too commonly used
     @CommandLine.Option(names = { "--port" },
@@ -139,12 +139,15 @@ public class Hawtio extends CamelCommand {
             // keep JVM running
             installHangupInterceptor();
             shutdownLatch.await();
-
-        } catch (Throwable e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Interrupted while launching Hawtio");
+            return 1;
+        } catch (Exception e) {
             System.err.println("Cannot launch Hawtio due to: " + e.getMessage());
             return 1;
         } finally {
-            downloader.stop();
+            downloader.close();
         }
 
         return 0;

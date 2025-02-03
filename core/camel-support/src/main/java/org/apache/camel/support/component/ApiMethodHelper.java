@@ -104,18 +104,14 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
                     // add method name alias
                     String alias = matcher.replaceAll(aliasEntry.getValue());
                     // convert first character to lowercase
-                    ObjectHelper.isNotEmpty(alias);
+                    ObjectHelper.notNullOrEmpty(alias, "alias");
                     final char firstChar = alias.charAt(0);
                     if (!Character.isLowerCase(firstChar)) {
-                        final StringBuilder builder = new StringBuilder();
+                        final StringBuilder builder = new StringBuilder(alias.length() + 2);
                         builder.append(Character.toLowerCase(firstChar)).append(alias, 1, alias.length());
                         alias = builder.toString();
                     }
-                    Set<String> names = tmpAliasesMap.get(alias);
-                    if (names == null) {
-                        names = new HashSet<>();
-                        tmpAliasesMap.put(alias, names);
-                    }
+                    Set<String> names = tmpAliasesMap.computeIfAbsent(alias, k -> new HashSet<>());
                     names.add(name);
                 }
             }
@@ -489,12 +485,11 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
             if (value != null && types[index].isArray()) {
                 Class<?> type = types[index];
 
-                if (value instanceof Collection) {
+                if (value instanceof Collection<?> collection) {
                     // convert collection to array
-                    Collection<?> collection = (Collection<?>) value;
                     Object array = Array.newInstance(type.getComponentType(), collection.size());
-                    if (array instanceof Object[]) {
-                        collection.toArray((Object[]) array);
+                    if (array instanceof Object[] objects) {
+                        collection.toArray(objects);
                     } else {
                         int i = 0;
                         for (Object el : collection) {
@@ -532,7 +527,7 @@ public final class ApiMethodHelper<T extends Enum<T> & ApiMethod> {
             throw new RuntimeCamelException(
                     String.format("Error invoking %s with %s: %s", method.getName(), properties, message),
                     cause != null ? cause : e);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw new RuntimeCamelException(
                     String.format("Error invoking %s with %s: %s", method.getName(), properties, e.getMessage()), e);
         }

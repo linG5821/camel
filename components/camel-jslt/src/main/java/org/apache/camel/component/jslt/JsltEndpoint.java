@@ -59,10 +59,10 @@ import org.apache.camel.util.IOHelper;
 import org.apache.camel.util.ObjectHelper;
 
 /**
- * Query or transform JSON payloads using an JSLT.
+ * Query or transform JSON payloads using JSLT.
  */
 @UriEndpoint(firstVersion = "3.1.0", scheme = "jslt", title = "JSLT", syntax = "jslt:resourceUri", producerOnly = true,
-             category = { Category.TRANSFORMATION }, headersClass = JsltConstants.class)
+             remote = false, category = { Category.TRANSFORMATION }, headersClass = JsltConstants.class)
 public class JsltEndpoint extends ResourceEndpoint {
 
     private static final ObjectMapper OBJECT_MAPPER;
@@ -93,6 +93,11 @@ public class JsltEndpoint extends ResourceEndpoint {
     }
 
     @Override
+    public boolean isRemote() {
+        return false;
+    }
+
+    @Override
     public ExchangePattern getExchangePattern() {
         return ExchangePattern.InOut;
     }
@@ -102,62 +107,68 @@ public class JsltEndpoint extends ResourceEndpoint {
         return "jslt:" + getResourceUri();
     }
 
-    private synchronized Expression getTransform(Message msg) throws Exception {
-        final String jsltStringFromHeader
-                = allowTemplateFromHeader ? msg.getHeader(JsltConstants.HEADER_JSLT_STRING, String.class) : null;
-
-        final boolean useTemplateFromUri = jsltStringFromHeader == null;
-
-        if (useTemplateFromUri && transform != null) {
-            return transform;
-        }
-
-        final Collection<Function> functions = Objects.requireNonNullElse(
-                ((JsltComponent) getComponent()).getFunctions(),
-                Collections.emptyList());
-
-        final JsonFilter objectFilter = Objects.requireNonNullElse(
-                ((JsltComponent) getComponent()).getObjectFilter(),
-                DEFAULT_JSON_FILTER);
-
-        final String transformSource;
-        final InputStream stream;
-
-        if (useTemplateFromUri) {
-            transformSource = getResourceUri();
-
-            if (log.isDebugEnabled()) {
-                log.debug("Jslt content read from resource {} with resourceUri: {} for endpoint {}",
-                        transformSource,
-                        transformSource,
-                        getEndpointUri());
-            }
-
-            stream = ResourceHelper.resolveMandatoryResourceAsInputStream(getCamelContext(), transformSource);
-            if (stream == null) {
-                throw new JsltException("Cannot load resource '" + transformSource + "': not found");
-            }
-        } else { // use template from header
-            stream = new ByteArrayInputStream(jsltStringFromHeader.getBytes(StandardCharsets.UTF_8));
-            transformSource = "<inline>";
-        }
-
-        final Expression transform;
+    private Expression getTransform(Message msg) throws Exception {
+        getInternalLock().lock();
         try {
-            transform = new Parser(new InputStreamReader(stream))
-                    .withFunctions(functions)
-                    .withObjectFilter(objectFilter)
-                    .withSource(transformSource)
-                    .compile();
-        } finally {
-            // the stream is consumed only on .compile(), cannot be closed before
-            IOHelper.close(stream);
-        }
 
-        if (useTemplateFromUri) {
-            this.transform = transform;
+            final String jsltStringFromHeader
+                    = allowTemplateFromHeader ? msg.getHeader(JsltConstants.HEADER_JSLT_STRING, String.class) : null;
+
+            final boolean useTemplateFromUri = jsltStringFromHeader == null;
+
+            if (useTemplateFromUri && transform != null) {
+                return transform;
+            }
+
+            final Collection<Function> functions = Objects.requireNonNullElse(
+                    ((JsltComponent) getComponent()).getFunctions(),
+                    Collections.emptyList());
+
+            final JsonFilter objectFilter = Objects.requireNonNullElse(
+                    ((JsltComponent) getComponent()).getObjectFilter(),
+                    DEFAULT_JSON_FILTER);
+
+            final String transformSource;
+            final InputStream stream;
+
+            if (useTemplateFromUri) {
+                transformSource = getResourceUri();
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Jslt content read from resource {} with resourceUri: {} for endpoint {}",
+                            transformSource,
+                            transformSource,
+                            getEndpointUri());
+                }
+
+                stream = ResourceHelper.resolveMandatoryResourceAsInputStream(getCamelContext(), transformSource);
+                if (stream == null) {
+                    throw new JsltException("Cannot load resource '" + transformSource + "': not found");
+                }
+            } else { // use template from header
+                stream = new ByteArrayInputStream(jsltStringFromHeader.getBytes(StandardCharsets.UTF_8));
+                transformSource = "<inline>";
+            }
+
+            final Expression transform;
+            try {
+                transform = new Parser(new InputStreamReader(stream))
+                        .withFunctions(functions)
+                        .withObjectFilter(objectFilter)
+                        .withSource(transformSource)
+                        .compile();
+            } finally {
+                // the stream is consumed only on .compile(), cannot be closed before
+                IOHelper.close(stream);
+            }
+
+            if (useTemplateFromUri) {
+                this.transform = transform;
+            }
+            return transform;
+        } finally {
+            getInternalLock().unlock();
         }
-        return transform;
     }
 
     public JsltEndpoint findOrCreateEndpoint(String uri, String newResourceUri) {
@@ -230,6 +241,9 @@ public class JsltEndpoint extends ResourceEndpoint {
         Map<String, JsonNode> serializedVariableMap = new HashMap<>();
         if (variableMap.containsKey("headers")) {
             serializedVariableMap.put("headers", serializeMapToJsonNode((Map<String, Object>) variableMap.get("headers")));
+        }
+        if (variableMap.containsKey("variables")) {
+            serializedVariableMap.put("variables", serializeMapToJsonNode((Map<String, Object>) variableMap.get("variables")));
         }
         if (variableMap.containsKey("exchange")) {
             Exchange ex = (Exchange) variableMap.get("exchange");
